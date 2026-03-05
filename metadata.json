@@ -1,0 +1,5 @@
+{
+  "name": "Shared Expense Tracker",
+  "description": "A mobile-friendly shared expense tracker for couples with charts, category management, and profile photos.",
+  "requestFramePermissions": ["camera"]
+}

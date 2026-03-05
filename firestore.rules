@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required, < 100 chars)
+    //   - email: string (required, valid email)
+    //   - photoURL: string (optional, < 1000 chars)
+    //   - role: string (required, 'admin' or 'user')
+    //
+    // Collection: categories
+    // Document ID: auto
+    // Fields:
+    //   - name: string (required, < 50 chars)
+    //   - color: string (required, < 20 chars)
+    //   - icon: string (required, < 50 chars)
+    //
+    // Collection: expenses
+    // Document ID: auto
+    // Fields:
+    //   - amount: number (required, > 0)
+    //   - categoryId: string (required, < 100 chars)
+    //   - description: string (optional, < 500 chars)
+    //   - date: string (required, ISO 8601)
+    //   - createdBy: string (required, matches uid)
+    //   - createdAt: string (required, ISO 8601)
+    //   - updatedAt: string (required, ISO 8601)
+    //
+    // Collection: expenseHistory
+    // Document ID: auto
+    // Fields:
+    //   - expenseId: string (required, < 100 chars)
+    //   - action: string (required, 'create', 'update', 'delete')
+    //   - previousData: string (optional, < 5000 chars)
+    //   - newData: string (optional, < 5000 chars)
+    //   - changedBy: string (required, matches uid)
+    //   - timestamp: string (required, ISO 8601)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "tarley.divino@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isAppUser() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser() {
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'photoURL', 'role']) &&
+             hasRequiredFields(['uid', 'name', 'email', 'role']) &&
+             request.resource.data.uid == request.auth.uid &&
+             validStringLength('name', 1, 100) &&
+             isValidEmail(request.resource.data.email) &&
+             isValidOptionalString('photoURL', 0, 1000) &&
+             (request.resource.data.role == 'user' || request.resource.data.role == 'admin');
+    }
+
+    function isValidCategory() {
+      return hasOnlyAllowedFields(['name', 'color', 'icon']) &&
+             hasRequiredFields(['name', 'color', 'icon']) &&
+             validStringLength('name', 1, 50) &&
+             validStringLength('color', 1, 20) &&
+             validStringLength('icon', 1, 50);
+    }
+
+    function isValidExpense() {
+      return hasOnlyAllowedFields(['amount', 'categoryId', 'description', 'date', 'createdBy', 'createdAt', 'updatedAt']) &&
+             hasRequiredFields(['amount', 'categoryId', 'date', 'createdBy', 'createdAt', 'updatedAt']) &&
+             request.resource.data.amount is number &&
+             validStringLength('categoryId', 1, 100) &&
+             isValidOptionalString('description', 0, 500) &&
+             isValidDateString(request.resource.data.date) &&
+             request.resource.data.createdBy == request.auth.uid &&
+             isValidDateString(request.resource.data.createdAt) &&
+             isValidDateString(request.resource.data.updatedAt);
+    }
+
+    function isValidExpenseUpdate() {
+      return isValidExpense() &&
+             request.resource.data.createdBy == resource.data.createdBy &&
+             request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isValidExpenseHistory() {
+      return hasOnlyAllowedFields(['expenseId', 'action', 'previousData', 'newData', 'changedBy', 'timestamp']) &&
+             hasRequiredFields(['expenseId', 'action', 'changedBy', 'timestamp']) &&
+             validStringLength('expenseId', 1, 100) &&
+             (request.resource.data.action == 'create' || request.resource.data.action == 'update' || request.resource.data.action == 'delete') &&
+             isValidOptionalString('previousData', 0, 5000) &&
+             isValidOptionalString('newData', 0, 5000) &&
+             request.resource.data.changedBy == request.auth.uid &&
+             isValidDateString(request.resource.data.timestamp);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser() && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser() && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAppUser() && isValidCategory();
+      allow update: if isAppUser() && isValidCategory();
+      allow delete: if isAppUser();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      allow create: if isAppUser() && isValidExpense();
+      allow update: if isAppUser() && isValidExpenseUpdate();
+      allow delete: if isAppUser();
+    }
+
+    match /expenseHistory/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAppUser() && isValidExpenseHistory();
+      allow update: if false; // History is append-only
+      allow delete: if false; // History cannot be deleted
+    }
+  }
+}
