@@ -26,6 +26,10 @@ export default function Dashboard() {
     fetchData();
   }, [currentDate]);
 
+  // Auxiliar para formatar moeda
+  const formatCurrency = (value: number) => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "");
     const options = { minimumFractionDigits: 2 };
@@ -88,17 +92,16 @@ export default function Dashboard() {
 
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen bg-slate-50 font-sans">
-      {/* Mês Seletor */}
+      {/* Seletor de Mês */}
       <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><ChevronLeft className="text-slate-300" /></button>
         <h2 className="font-bold text-lg capitalize">{format(currentDate, 'MMMM yyyy', { locale: ptBR })}</h2>
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}><ChevronRight className="text-slate-300" /></button>
       </div>
 
-      {/* EXTRATO */}
+      {/* TELA: EXTRATO */}
       {activeTab === 'list' && (
         <div className="space-y-4 animate-in fade-in">
-          {/* Filtros de Usuário */}
           <div className="flex items-center gap-3 pb-2 overflow-x-auto no-scrollbar">
             <button onClick={() => setFilterUserId(null)} className={`px-4 py-2 rounded-full text-xs font-bold ${!filterUserId ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>Todos</button>
             {Array.from(new Set(expenses.map(e => e.user_id))).map(uid => {
@@ -113,7 +116,7 @@ export default function Dashboard() {
           </div>
           <div className="space-y-3">
             {expenses.filter(exp => !filterUserId || exp.user_id === filterUserId).map((exp) => (
-              <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100 group active:bg-slate-50">
+              <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100 group">
                 <div className="flex items-center gap-3 flex-1 overflow-hidden">
                   <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name || 'U'}`} className="w-11 h-11 rounded-full border-2 border-white shadow-sm object-cover" alt="" />
                   <div className="flex flex-col min-w-0">
@@ -122,9 +125,9 @@ export default function Dashboard() {
                     <span className="text-[10px] text-slate-400">{exp.profiles?.full_name}</span>
                   </div>
                 </div>
-                <div className="text-right flex flex-col items-end gap-1 ml-2">
-                  <span className="font-bold text-slate-900">{Number(exp.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}</span>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100">
+                <div className="text-right ml-2">
+                  <span className="font-bold text-slate-900">{formatCurrency(exp.amount)}</span>
+                  <div className="flex gap-2 justify-end mt-1 opacity-0 group-hover:opacity-100">
                     <button onClick={() => { setEditingId(exp.id); setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount)); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); }} className="text-blue-500"><Edit2 size={14}/></button>
                     <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400"><Trash2 size={14}/></button>
                   </div>
@@ -135,9 +138,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ADICIONAR */}
+      {/* TELA: ADICIONAR */}
       {activeTab === 'add' && (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 animate-in slide-in-from-bottom-4">
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
           <h3 className="font-bold text-slate-800">{editingId ? 'Editar Gasto' : 'Novo Gasto'}</h3>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-blue-600 text-2xl">R$</span>
@@ -147,17 +150,16 @@ export default function Dashboard() {
             <option value="">Categoria</option>
             {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
-          <input type="text" placeholder="Descrição rápida" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all">Confirmar</button>
+          <input type="text" placeholder="Descrição" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95">Confirmar</button>
         </form>
       )}
 
-      {/* GRÁFICOS E METAS */}
+      {/* TELA: GRÁFICOS E METAS */}
       {activeTab === 'stats' && (
         <div className="space-y-6 animate-in fade-in pb-10">
-          {/* 1. Evolução Anual (Barras) */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><BarChart3 size={14}/> Evolução no Ano</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><BarChart3 size={14}/> Evolução Anual</h3>
             <div className="h-40 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={annualChartData}>
@@ -169,7 +171,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 2. Divisão do Mês (Pizza) - O QUE TINHA SUMIDO */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><PieIcon size={14}/> Gastos por Categoria</h3>
             <div className="h-56 w-full">
@@ -186,25 +187,38 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 3. Metas do Mês (Termômetro) */}
+          {/* PROGRESSO DAS METAS (REFORMULADO) */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Progresso das Metas</h3>
-            <div className="space-y-5">
+            <div className="space-y-6">
               {categories.map((cat) => {
                 const total = expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const meta = Number(cat.monthly_goal) || 0;
-                const percent = meta > 0 ? Math.min((total / meta) * 100, 100) : 0;
+                
+                // Cálculo para a barra de duas cores
+                const barMax = Math.max(total, meta);
+                const blueWidth = barMax > 0 ? (Math.min(total, meta) / barMax) * 100 : 0;
+                const redWidth = (barMax > 0 && total > meta) ? ((total - meta) / barMax) * 100 : 0;
                 const isOver = meta > 0 && total > meta;
+
                 return (
-                  <div key={cat.id} className="space-y-1">
+                  <div key={cat.id} className="space-y-1.5">
                     <div className="flex justify-between text-[11px] font-bold">
                       <span className="text-slate-700">{cat.name}</span>
                       <span className={isOver ? 'text-red-500' : 'text-slate-400'}>
-                        {total.toLocaleString('pt-br', {style:'currency', currency:'BRL'})} {meta > 0 && `/ ${meta}`}
+                        {formatCurrency(total)} / <span className="text-slate-500 font-extrabold">{formatCurrency(meta)}</span>
                       </span>
                     </div>
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-700 ${isOver ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)]' : 'bg-blue-500'}`} style={{ width: `${meta > 0 ? percent : 0}%` }} />
+                    {/* Barra de Progresso Dual */}
+                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                      <div 
+                        className={`h-full transition-all duration-700 ${total >= meta && meta > 0 ? 'bg-blue-600' : 'bg-blue-400'}`} 
+                        style={{ width: `${blueWidth}%` }} 
+                      />
+                      <div 
+                        className="h-full bg-red-500 transition-all duration-700 shadow-[0_0_8px_rgba(239,68,68,0.4)]" 
+                        style={{ width: `${redWidth}%` }} 
+                      />
                     </div>
                   </div>
                 );
@@ -214,7 +228,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* CONFIGURAÇÕES */}
+      {/* TELA: CONFIGURAÇÕES */}
       {activeTab === 'config' && (
         <div className="space-y-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
@@ -225,8 +239,8 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">Gerenciar Categorias & Metas</h3>
-            <CategoryManager categories={categories} refresh={fetchData} />
+            <h3 className="font-bold text-slate-800 mb-4">Categorias & Metas</h3>
+            <CategoryManager categories={categories} refresh={fetchData} formatCurrency={formatCurrency} />
           </div>
           <button onClick={() => supabase.auth.signOut()} className="w-full p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center justify-center gap-2"><LogOut size={20} /> Sair</button>
         </div>
@@ -237,13 +251,26 @@ export default function Dashboard() {
   );
 }
 
-function CategoryManager({ categories, refresh }: { categories: any[], refresh: () => void }) {
+// SUB-COMPONENTE CATEGORY MANAGER
+function CategoryManager({ categories, refresh, formatCurrency }: any) {
   const [newCat, setNewCat] = useState('');
+  
   const addCategory = async () => {
     if (!newCat) return;
     await supabase.from('categories').insert({ name: newCat });
     setNewCat(''); refresh();
   };
+
+  // Função para lidar com a máscara na edição da meta
+  const handleMetaChange = async (id: string, inputValue: string) => {
+    // Remove R$, pontos e converte vírgula para ponto
+    const numericValue = parseFloat(inputValue.replace(/[R$\s.]/g, '').replace(',', '.'));
+    if (!isNaN(numericValue)) {
+      await supabase.from('categories').update({ monthly_goal: numericValue }).eq('id', id);
+      refresh();
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -251,21 +278,22 @@ function CategoryManager({ categories, refresh }: { categories: any[], refresh: 
         <button onClick={addCategory} className="bg-blue-600 text-white p-3 rounded-xl"><Plus size={20}/></button>
       </div>
       <div className="space-y-3 max-h-72 overflow-y-auto pr-1 no-scrollbar">
-        {categories.map(c => (
+        {categories.map((c: any) => (
           <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-slate-700 text-sm font-bold uppercase tracking-tighter">{c.name}</span>
-              <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('categories').delete().eq('id', c.id); refresh(); } }} className="text-slate-300 hover:text-red-400"><Trash2 size={14}/></button>
+              <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('categories').delete().eq('id', c.id); refresh(); } }} className="text-slate-300"><Trash2 size={14}/></button>
             </div>
-            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Meta Mensal: R$</span>
+            <div className="flex flex-col gap-1 bg-white p-2.5 rounded-xl border border-slate-100">
+              <label className="text-[9px] font-bold text-slate-400 uppercase">Definir Meta:</label>
               <input 
-                type="number"
-                className="bg-transparent text-xs font-bold text-blue-600 outline-none w-full"
-                defaultValue={c.monthly_goal}
-                onBlur={async (e) => {
-                  await supabase.from('categories').update({ monthly_goal: e.target.value }).eq('id', c.id);
-                  refresh();
+                type="text"
+                className="bg-transparent text-sm font-black text-blue-600 outline-none w-full"
+                defaultValue={formatCurrency(c.monthly_goal || 0)}
+                onBlur={(e) => handleMetaChange(c.id, e.target.value)}
+                onFocus={(e) => {
+                  // Quando foca, limpa a formatação para facilitar a edição
+                  e.target.value = c.monthly_goal.toString();
                 }}
               />
             </div>
