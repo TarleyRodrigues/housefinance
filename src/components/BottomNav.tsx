@@ -1,9 +1,10 @@
-import { LayoutDashboard, PlusCircle, PieChart, Settings, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, PieChart, Settings, ShoppingCart, Bell } from 'lucide-react';
 
 export default function BottomNav({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
   const tabs = [
     { id: 'list', icon: LayoutDashboard, label: 'Extrato' },
-    { id: 'shopping', icon: ShoppingCart, label: 'Compras' }, // NOVA ABA
+    { id: 'shopping', icon: ShoppingCart, label: 'Compras' },
+    { id: 'reminders', icon: Bell, label: 'Lembretes' }, // NOVO
     { id: 'add', icon: PlusCircle, label: 'Novo' },
     { id: 'stats', icon: PieChart, label: 'Gráficos' },
     { id: 'config', icon: Settings, label: 'Ajustes' },
