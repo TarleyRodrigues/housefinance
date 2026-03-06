@@ -299,29 +299,40 @@ function CategoryManager({ categories, refresh, formatCurrency }: any) {
       </div>
       <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
         {categories.map((c: any) => (
-          <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
-            <div className="flex justify-between items-center">
-              {/* NOME EDITÁVEL */}
-              <input 
-                type="text"
-                className="bg-transparent text-sm font-black text-slate-700 outline-none uppercase tracking-tighter w-full border-b border-transparent focus:border-slate-200"
-                defaultValue={c.name}
-                onBlur={(e) => handleNameChange(c.id, c.name, e.target.value)}
-              />
-              <button onClick={async () => { if(confirm("Remover? Isso não removerá os gastos, mas eles ficarão sem categoria.")) { await supabase.from('categories').delete().eq('id', id); refresh(); } }} className="text-slate-300 ml-2"><Trash2 size={14}/></button>
-            </div>
-            
-            <div className="flex flex-col gap-1 bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Definir Meta Mensal:</label>
-              <input 
-                type="text"
-                className="bg-transparent text-sm font-black text-blue-600 outline-none w-full"
-                defaultValue={formatCurrency(c.monthly_goal || 0)}
-                onBlur={(e) => handleMetaChange(c.id, e.target.value)}
-                onFocus={(e) => e.target.value = c.monthly_goal.toString()}
-              />
-            </div>
-          </div>
+  <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+    <div className="flex justify-between items-center">
+      {/* NOME EDITÁVEL - FOCO NO c.id e c.name */}
+      <input 
+        type="text"
+        className="bg-transparent text-sm font-black text-slate-700 outline-none uppercase tracking-tighter w-full border-b border-transparent focus:border-slate-200"
+        defaultValue={c.name}
+        onBlur={(e) => handleNameChange(c.id, c.name, e.target.value)}
+      />
+      {/* BOTÃO REMOVER - CORREÇÃO: Usar c.id em vez de id */}
+      <button 
+        onClick={async () => { 
+          if(confirm("Remover categoria? Gastos existentes ficarão sem categoria vinculada.")) { 
+            await supabase.from('categories').delete().eq('id', c.id); 
+            refresh(); 
+          } 
+        }} 
+        className="text-slate-300 ml-2 hover:text-red-500 transition-colors"
+      >
+        <Trash2 size={14}/>
+      </button>
+    </div>
+    
+    <div className="flex flex-col gap-1 bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
+      <label className="text-[9px] font-bold text-slate-400 uppercase">Definir Meta Mensal:</label>
+      <input 
+        type="text"
+        className="bg-transparent text-sm font-black text-blue-600 outline-none w-full"
+        defaultValue={formatCurrency(c.monthly_goal || 0)}
+        onBlur={(e) => handleMetaChange(c.id, e.target.value)}
+        onFocus={(e) => e.target.value = c.monthly_goal.toString()}
+      />
+    </div>
+  </div>
         ))}
       </div>
     </div>
