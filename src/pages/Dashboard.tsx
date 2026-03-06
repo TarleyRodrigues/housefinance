@@ -5,7 +5,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import BottomNav from '../components/BottomNav';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis } from 'recharts';
-import { Trash2, Edit2, ChevronLeft, ChevronRight, Plus, X, LogOut, Target, PieChart as PieIcon, BarChart3 } from 'lucide-react';
+import { Trash2, Edit2, ChevronLeft, ChevronRight, Plus, X, LogOut, Target, PieChart as PieIcon, BarChart3, RefreshCcw } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [annualChartData, setAnnualChartData] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
@@ -26,7 +27,17 @@ export default function Dashboard() {
     fetchData();
   }, [currentDate]);
 
-  // Auxiliar para formatar moeda
+  // FUNÇÃO DE ATUALIZAÇÃO FORÇADA
+  const handleHardRefresh = async () => {
+    setIsRefreshing(true);
+    // Limpa caches simples e recarrega a página
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(name => caches.delete(name)));
+    }
+    window.location.reload();
+  };
+
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -92,10 +103,19 @@ export default function Dashboard() {
 
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen bg-slate-50 font-sans">
-      {/* Seletor de Mês */}
+      {/* Header com Botão de Refresh */}
       <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><ChevronLeft className="text-slate-300" /></button>
-        <h2 className="font-bold text-lg capitalize">{format(currentDate, 'MMMM yyyy', { locale: ptBR })}</h2>
+        <div className="flex flex-col items-center">
+          <h2 className="font-bold text-lg capitalize leading-none">{format(currentDate, 'MMMM yyyy', { locale: ptBR })}</h2>
+          <button 
+            onClick={handleHardRefresh}
+            className="flex items-center gap-1 mt-1 text-[10px] font-black text-blue-500 uppercase tracking-tighter active:scale-90 transition-transform"
+          >
+            <RefreshCcw size={10} className={isRefreshing ? 'animate-spin' : ''} />
+            Atualizar App
+          </button>
+        </div>
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}><ChevronRight className="text-slate-300" /></button>
       </div>
 
@@ -155,7 +175,7 @@ export default function Dashboard() {
         </form>
       )}
 
-      {/* TELA: GRÁFICOS E METAS */}
+      {/* TELA: ESTATÍSTICAS */}
       {activeTab === 'stats' && (
         <div className="space-y-6 animate-in fade-in pb-10">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
@@ -187,20 +207,16 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* PROGRESSO DAS METAS (REFORMULADO) */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Progresso das Metas</h3>
             <div className="space-y-6">
               {categories.map((cat) => {
                 const total = expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const meta = Number(cat.monthly_goal) || 0;
-                
-                // Cálculo para a barra de duas cores
                 const barMax = Math.max(total, meta);
                 const blueWidth = barMax > 0 ? (Math.min(total, meta) / barMax) * 100 : 0;
                 const redWidth = (barMax > 0 && total > meta) ? ((total - meta) / barMax) * 100 : 0;
                 const isOver = meta > 0 && total > meta;
-
                 return (
                   <div key={cat.id} className="space-y-1.5">
                     <div className="flex justify-between text-[11px] font-bold">
@@ -209,16 +225,9 @@ export default function Dashboard() {
                         {formatCurrency(total)} / <span className="text-slate-500 font-extrabold">{formatCurrency(meta)}</span>
                       </span>
                     </div>
-                    {/* Barra de Progresso Dual */}
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                      <div 
-                        className={`h-full transition-all duration-700 ${total >= meta && meta > 0 ? 'bg-blue-600' : 'bg-blue-400'}`} 
-                        style={{ width: `${blueWidth}%` }} 
-                      />
-                      <div 
-                        className="h-full bg-red-500 transition-all duration-700 shadow-[0_0_8px_rgba(239,68,68,0.4)]" 
-                        style={{ width: `${redWidth}%` }} 
-                      />
+                      <div className={`h-full transition-all duration-700 ${total >= meta && meta > 0 ? 'bg-blue-600' : 'bg-blue-400'}`} style={{ width: `${blueWidth}%` }} />
+                      <div className="h-full bg-red-500 transition-all duration-700 shadow-[0_0_8px_rgba(239,68,68,0.4)]" style={{ width: `${redWidth}%` }} />
                     </div>
                   </div>
                 );
@@ -251,7 +260,7 @@ export default function Dashboard() {
   );
 }
 
-// SUB-COMPONENTE CATEGORY MANAGER
+// COMPONENTE GESTOR DE CATEGORIAS ATUALIZADO (NOME EDITÁVEL)
 function CategoryManager({ categories, refresh, formatCurrency }: any) {
   const [newCat, setNewCat] = useState('');
   
@@ -261,9 +270,20 @@ function CategoryManager({ categories, refresh, formatCurrency }: any) {
     setNewCat(''); refresh();
   };
 
-  // Função para lidar com a máscara na edição da meta
+  // FUNÇÃO PARA EDITAR NOME DA CATEGORIA (ATUALIZA GASTOS TAMBÉM)
+  const handleNameChange = async (id: string, oldName: string, newName: string) => {
+    if (newName === oldName || !newName) return;
+    
+    // 1. Atualiza na tabela de categorias
+    await supabase.from('categories').update({ name: newName }).eq('id', id);
+    
+    // 2. Atualiza todos os gastos que usavam o nome antigo
+    await supabase.from('expenses').update({ category_name: newName }).eq('category_name', oldName);
+    
+    refresh();
+  };
+
   const handleMetaChange = async (id: string, inputValue: string) => {
-    // Remove R$, pontos e converte vírgula para ponto
     const numericValue = parseFloat(inputValue.replace(/[R$\s.]/g, '').replace(',', '.'));
     if (!isNaN(numericValue)) {
       await supabase.from('categories').update({ monthly_goal: numericValue }).eq('id', id);
@@ -277,24 +297,28 @@ function CategoryManager({ categories, refresh, formatCurrency }: any) {
         <input className="flex-1 p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm outline-none" placeholder="Nova categoria..." value={newCat} onChange={e => setNewCat(e.target.value)} />
         <button onClick={addCategory} className="bg-blue-600 text-white p-3 rounded-xl"><Plus size={20}/></button>
       </div>
-      <div className="space-y-3 max-h-72 overflow-y-auto pr-1 no-scrollbar">
+      <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
         {categories.map((c: any) => (
-          <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+          <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-slate-700 text-sm font-bold uppercase tracking-tighter">{c.name}</span>
-              <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('categories').delete().eq('id', c.id); refresh(); } }} className="text-slate-300"><Trash2 size={14}/></button>
+              {/* NOME EDITÁVEL */}
+              <input 
+                type="text"
+                className="bg-transparent text-sm font-black text-slate-700 outline-none uppercase tracking-tighter w-full border-b border-transparent focus:border-slate-200"
+                defaultValue={c.name}
+                onBlur={(e) => handleNameChange(c.id, c.name, e.target.value)}
+              />
+              <button onClick={async () => { if(confirm("Remover? Isso não removerá os gastos, mas eles ficarão sem categoria.")) { await supabase.from('categories').delete().eq('id', id); refresh(); } }} className="text-slate-300 ml-2"><Trash2 size={14}/></button>
             </div>
-            <div className="flex flex-col gap-1 bg-white p-2.5 rounded-xl border border-slate-100">
-              <label className="text-[9px] font-bold text-slate-400 uppercase">Definir Meta:</label>
+            
+            <div className="flex flex-col gap-1 bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
+              <label className="text-[9px] font-bold text-slate-400 uppercase">Definir Meta Mensal:</label>
               <input 
                 type="text"
                 className="bg-transparent text-sm font-black text-blue-600 outline-none w-full"
                 defaultValue={formatCurrency(c.monthly_goal || 0)}
                 onBlur={(e) => handleMetaChange(c.id, e.target.value)}
-                onFocus={(e) => {
-                  // Quando foca, limpa a formatação para facilitar a edição
-                  e.target.value = c.monthly_goal.toString();
-                }}
+                onFocus={(e) => e.target.value = c.monthly_goal.toString()}
               />
             </div>
           </div>
