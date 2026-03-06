@@ -1,8 +1,9 @@
-import { LayoutDashboard, PlusCircle, PieChart, Settings } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, PieChart, Settings, ShoppingCart } from 'lucide-react';
 
 export default function BottomNav({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
   const tabs = [
     { id: 'list', icon: LayoutDashboard, label: 'Extrato' },
+    { id: 'shopping', icon: ShoppingCart, label: 'Compras' }, // NOVA ABA
     { id: 'add', icon: PlusCircle, label: 'Novo' },
     { id: 'stats', icon: PieChart, label: 'Gráficos' },
     { id: 'config', icon: Settings, label: 'Ajustes' },
@@ -14,10 +15,10 @@ export default function BottomNav({ activeTab, setActiveTab }: { activeTab: stri
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
-          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === tab.id ? 'text-blue-600' : 'text-slate-400'}`}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === tab.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
         >
-          <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
-          <span className="text-[10px] font-medium">{tab.label}</span>
+          <tab.icon size={22} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
+          <span className="text-[10px] font-bold uppercase tracking-tighter">{tab.label}</span>
         </button>
       ))}
     </nav>
