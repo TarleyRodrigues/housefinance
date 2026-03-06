@@ -5,7 +5,7 @@ import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import BottomNav from '../components/BottomNav';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis } from 'recharts';
-import { Trash2, Edit2, ChevronLeft, ChevronRight, Plus, X, LogOut, Target, PieChart as PieIcon, BarChart3, RefreshCcw, CheckCircle2, Circle, Bell, Calendar, Clock, ShoppingCart } from 'lucide-react';
+import { Trash2, Edit2, ChevronLeft, ChevronRight, Plus, X, LogOut, Target, PieChart as PieIcon, BarChart3, RefreshCcw, CheckCircle2, Circle, Bell, Calendar, Clock, ShoppingCart, Filter } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -25,7 +25,10 @@ export default function Dashboard() {
   const [description, setDescription] = useState('');
   const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // FILTROS
   const [filterUserId, setFilterUserId] = useState<string | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null); // NOVO FILTRO
 
   // Estados dos Lembretes
   const [remText, setRemText] = useState('');
@@ -69,26 +72,22 @@ export default function Dashboard() {
       const startM = startOfMonth(currentDate).toISOString();
       const endM = endOfMonth(currentDate).toISOString();
 
-      // BUSCA LEMBRETES
       if (activeTab === 'reminders') {
         const { data: rems } = await supabase.from('reminders').select('*, profiles(full_name, avatar_url)')
           .gte('reminder_date', startM.split('T')[0]).lte('reminder_date', endM.split('T')[0]).order('reminder_date', { ascending: true });
         if (rems) setReminders(rems);
       }
 
-      // BUSCA COMPRAS
       if (activeTab === 'shopping') {
         const { data: items } = await supabase.from('shopping_list').select('*, profiles(full_name, avatar_url)')
           .order('is_pending', { ascending: false }).order('created_at', { ascending: false });
         if (items) setShoppingList(items);
       }
 
-      // BUSCA FINANCEIRA
       const { data: exps } = await supabase.from('expenses').select(`id, amount, category_name, description, created_at, user_id, profiles (full_name, avatar_url)`)
         .eq('is_deleted', false).gte('created_at', startM).lte('created_at', endM).order('created_at', { ascending: false });
       if (exps) setExpenses(exps);
 
-      // BUSCA ANUAL
       const startYear = new Date(currentDate.getFullYear(), 0, 1).toISOString();
       const endYear = new Date(currentDate.getFullYear(), 11, 31).toISOString();
       const { data: annualData } = await supabase.from('expenses').select('amount, created_at').eq('is_deleted', false).gte('created_at', startYear).lte('created_at', endYear);
@@ -97,7 +96,6 @@ export default function Dashboard() {
     } catch (error) { console.error(error); }
   }
 
-  // --- HANDLERS ---
   const handleReminderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = { text: remText, reminder_date: remDate, reminder_time: remTime, user_id: user.id };
@@ -110,7 +108,6 @@ export default function Dashboard() {
     e.preventDefault();
     const numericAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
     if (editingId) {
-      // CORREÇÃO: Não envia user_id na edição para manter autor original
       await supabase.from('expenses').update({ amount: numericAmount, category_name: category, description }).eq('id', editingId);
     } else {
       await supabase.from('expenses').insert({ amount: numericAmount, category_name: category, description, user_id: user.id });
@@ -123,7 +120,6 @@ export default function Dashboard() {
 
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen bg-slate-50 font-sans">
-      {/* Header Fixo com Refresh */}
       <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><ChevronLeft className="text-slate-300" /></button>
         <div className="flex flex-col items-center">
@@ -135,46 +131,74 @@ export default function Dashboard() {
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}><ChevronRight className="text-slate-300" /></button>
       </div>
 
-      {/* TELA: EXTRATO */}
+      {/* TELA: EXTRATO COM FILTROS MELHORADOS */}
       {activeTab === 'list' && (
         <div className="space-y-4 animate-in fade-in">
-          <div className="flex items-center gap-3 pb-2 overflow-x-auto no-scrollbar">
-            <button onClick={() => setFilterUserId(null)} className={`px-4 py-2 rounded-full text-xs font-bold ${!filterUserId ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>Todos</button>
+          
+          {/* FILTRO 1: USUÁRIOS */}
+          <div className="flex items-center gap-3 pb-1 overflow-x-auto no-scrollbar">
+            <button onClick={() => setFilterUserId(null)} className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${!filterUserId ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>Todos</button>
             {Array.from(new Set(expenses.map(e => e.user_id))).map(uid => {
               const exp = expenses.find(e => e.user_id === uid);
               return (
-                <button key={uid} onClick={() => setFilterUserId(filterUserId === uid ? null : uid)} className={`flex items-center gap-2 p-1 pr-4 rounded-full border ${filterUserId === uid ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-100 text-slate-500'}`}>
-                  <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name}`} className="w-7 h-7 rounded-full object-cover" alt="" />
-                  <span className="text-xs font-bold">{exp.profiles?.full_name?.split(' ')[0]}</span>
+                <button key={uid} onClick={() => setFilterUserId(filterUserId === uid ? null : uid)} className={`flex items-center gap-2 p-1 pr-4 rounded-full border transition-all ${filterUserId === uid ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500'}`}>
+                  <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name}`} className="w-7 h-7 rounded-full object-cover bg-slate-100" alt="" />
+                  <span className="text-[10px] font-bold uppercase">{exp.profiles?.full_name?.split(' ')[0]}</span>
                 </button>
               )
             })}
           </div>
-          <div className="space-y-3">
-            {expenses.filter(exp => !filterUserId || exp.user_id === filterUserId).map((exp) => (
-              <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100 group">
-                <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                  <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name || 'U'}`} className="w-11 h-11 rounded-full border-2 border-white shadow-sm object-cover" alt="" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] font-bold text-blue-500 uppercase">{exp.category_name}</span>
-                    <span className="text-slate-800 font-medium truncate text-sm">{exp.description || 'Sem descrição'}</span>
-                    <span className="text-[10px] text-slate-400">{exp.profiles?.full_name}</span>
-                  </div>
-                </div>
-                <div className="text-right ml-2">
-                  <span className="font-bold text-slate-900">{formatCurrency(exp.amount)}</span>
-                  <div className="flex gap-2 justify-end mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditingId(exp.id); setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount)); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); }} className="text-blue-500"><Edit2 size={14}/></button>
-                    <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400"><Trash2 size={14}/></button>
-                  </div>
-                </div>
-              </div>
+
+          {/* FILTRO 2: CATEGORIAS (NOVO) */}
+          <div className="flex items-center gap-2 pb-2 overflow-x-auto no-scrollbar border-b border-slate-100">
+            <button 
+              onClick={() => setFilterCategory(null)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${!filterCategory ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}
+            >
+              <Filter size={10} /> Categorias
+            </button>
+            {categories.filter(cat => expenses.some(e => e.category_name === cat.name)).map(cat => (
+              <button 
+                key={cat.id}
+                onClick={() => setFilterCategory(filterCategory === cat.name ? null : cat.name)}
+                className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase whitespace-nowrap transition-all border ${filterCategory === cat.name ? 'bg-blue-100 border-blue-200 text-blue-700' : 'bg-white border-slate-100 text-slate-400'}`}
+              >
+                {cat.name}
+              </button>
             ))}
+          </div>
+
+          <div className="space-y-3">
+            {expenses
+              .filter(exp => !filterUserId || exp.user_id === filterUserId)
+              .filter(exp => !filterCategory || exp.category_name === filterCategory)
+              .map((exp) => (
+                <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100 group active:bg-slate-50">
+                  <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                    <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name || 'U'}`} className="w-11 h-11 rounded-full border-2 border-white shadow-sm flex-shrink-0 object-cover" alt="" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] font-bold text-blue-500 uppercase tracking-tighter">{exp.category_name}</span>
+                      <span className="text-slate-800 font-medium truncate text-sm leading-tight">{exp.description || 'Sem descrição'}</span>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase">{exp.profiles?.full_name}</span>
+                    </div>
+                  </div>
+                  <div className="text-right ml-2">
+                    <span className="font-bold text-slate-900 text-sm">{formatCurrency(exp.amount)}</span>
+                    <div className="flex gap-2 justify-end mt-1 opacity-0 group-hover:opacity-100">
+                      <button onClick={() => { setEditingId(exp.id); setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount)); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); }} className="text-blue-500"><Edit2 size={14}/></button>
+                      <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400"><Trash2 size={14}/></button>
+                    </div>
+                  </div>
+                </div>
+            ))}
+            {expenses.length > 0 && expenses.filter(exp => (!filterUserId || exp.user_id === filterUserId) && (!filterCategory || exp.category_name === filterCategory)).length === 0 && (
+              <p className="text-center text-slate-400 py-10 text-xs italic">Nenhum gasto encontrado para este filtro.</p>
+            )}
           </div>
         </div>
       )}
 
-      {/* TELA: COMPRAS */}
+      {/* COMPRAS */}
       {activeTab === 'shopping' && (
         <div className="space-y-6 animate-in fade-in">
           <form onSubmit={async (e) => { e.preventDefault(); if(!newItem) return; await supabase.from('shopping_list').insert({ item_name: newItem, user_id: user.id }); setNewItem(''); fetchData(); }} className="flex gap-2">
@@ -200,18 +224,17 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TELA: LEMBRETES */}
+      {/* LEMBRETES */}
       {activeTab === 'reminders' && (
         <div className="space-y-6 animate-in fade-in">
           <form onSubmit={handleReminderSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Bell size={18} className="text-blue-500"/> {editRemId ? 'Editar Lembrete' : 'Novo Lembrete'}</h3>
+            <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-tighter"><Bell size={16} className="text-blue-500"/> {editRemId ? 'Editar Lembrete' : 'Novo Lembrete'}</h3>
             <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100" placeholder="Lembrar de quê?" required value={remText} onChange={e => setRemText(e.target.value)} />
             <div className="flex gap-2">
               <div className="flex-1 relative"><Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"/><input type="date" required className="w-full p-4 pl-12 bg-slate-50 rounded-2xl outline-none border border-slate-100 text-sm" value={remDate} onChange={e => setRemDate(e.target.value)} /></div>
               <div className="w-32 relative"><Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"/><input type="time" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl outline-none border border-slate-100 text-sm" value={remTime} onChange={e => setRemTime(e.target.value)} /></div>
             </div>
             <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all">Confirmar</button>
-            {editRemId && <button type="button" onClick={() => {setEditRemId(null); setRemText('');}} className="w-full text-xs text-slate-400">Cancelar</button>}
           </form>
           <div className="space-y-3 pb-10">
             {reminders.map((rem) => (
@@ -223,7 +246,7 @@ export default function Dashboard() {
                     <p className="text-[10px] text-slate-400 font-bold uppercase">{format(parseISO(rem.reminder_date), "dd/MM", { locale: ptBR })} {rem.reminder_time && ` às ${rem.reminder_time}`}</p>
                   </div>
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100">
                    <button onClick={() => {setEditRemId(rem.id); setRemText(rem.text); setRemDate(rem.reminder_date); setRemTime(rem.reminder_time || '');}} className="text-blue-500"><Edit2 size={16}/></button>
                    <button onClick={async () => { if(confirm("Apagar?")) { await supabase.from('reminders').delete().eq('id', rem.id); fetchData(); } }} className="text-red-400"><Trash2 size={16}/></button>
                 </div>
@@ -233,25 +256,25 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TELA: ADICIONAR GASTO */}
+      {/* ADICIONAR GASTO */}
       {activeTab === 'add' && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 animate-in slide-in-from-bottom-4">
           <h3 className="font-bold text-slate-800">{editingId ? 'Editar Gasto' : 'Novo Gasto'}</h3>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-blue-600 text-2xl">R$</span>
-            <input type="text" inputMode="numeric" placeholder="0,00" required className="w-full p-4 pl-14 bg-slate-50 rounded-2xl text-3xl font-bold outline-none text-blue-600 border-2 border-transparent focus:border-blue-100 transition-all" value={amount} onChange={handleCurrencyChange} />
+            <input type="text" inputMode="numeric" placeholder="0,00" required className="w-full p-4 pl-14 bg-slate-50 rounded-2xl text-3xl font-bold outline-none text-blue-600 border-2 border-transparent focus:border-blue-100" value={amount} onChange={handleCurrencyChange} />
           </div>
-          <select required value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100 text-slate-600">
+          <select required value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100 text-slate-600 font-bold uppercase text-xs tracking-widest">
             <option value="">Selecione a Categoria</option>
             {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
           <input type="text" placeholder="Descrição rápida (opcional)" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-slate-100" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all">Confirmar Gasto</button>
-          {editingId && <button type="button" onClick={() => {setEditingId(null); setAmount(''); setActiveTab('list')}} className="w-full py-2 text-slate-400 text-sm italic">Cancelar Edição</button>}
+          <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all font-black uppercase tracking-widest">Confirmar Gasto</button>
+          {editingId && <button type="button" onClick={() => {setEditingId(null); setAmount(''); setActiveTab('list')}} className="w-full py-2 text-slate-400 text-[10px] font-black uppercase tracking-widest">Cancelar Edição</button>}
         </form>
       )}
 
-      {/* TELA: GRÁFICOS */}
+      {/* GRÁFICOS */}
       {activeTab === 'stats' && (
         <div className="space-y-6 animate-in fade-in pb-10">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
@@ -281,7 +304,6 @@ export default function Dashboard() {
               ) : <p className="text-center text-slate-300 py-10 text-sm italic">Sem gastos registrados</p>}
             </div>
           </div>
-          {/* BARRA DE METAS DUAL COLOR */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Metas do Mês</h3>
             <div className="space-y-6">
@@ -310,7 +332,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TELA: CONFIGURAÇÕES */}
+      {/* CONFIGURAÇÕES */}
       {activeTab === 'config' && (
         <div className="space-y-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
@@ -324,7 +346,7 @@ export default function Dashboard() {
             <h3 className="font-bold text-slate-800 mb-4 tracking-tight">Gerenciar Categorias & Metas</h3>
             <CategoryManager categories={categories} refresh={fetchData} formatCurrency={formatCurrency} />
           </div>
-          <button onClick={() => supabase.auth.signOut()} className="w-full p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"><LogOut size={20} /> Sair do App</button>
+          <button onClick={() => supabase.auth.signOut()} className="w-full p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all uppercase tracking-widest text-xs"><LogOut size={16} /> Sair do App</button>
         </div>
       )}
 
