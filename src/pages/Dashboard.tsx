@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 // ─── CHAVE GEMINI ────────────────────────────────────────────────────────────
-const GEMINI_KEY = "SUA_CHAVE_AQUI"; // substitua pela sua chave real
+const GEMINI_KEY = "AIzaSyA3sCpJ3KdfLYS2Ep0kY8lJF8AdCY_CaIE"; // substitua pela sua chave real
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 const Toast = ({ message, type }: { message: string; type: string }) => (
