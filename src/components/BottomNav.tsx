@@ -4,7 +4,7 @@ export default function BottomNav({ activeTab, setActiveTab }: { activeTab: stri
   const tabs = [
     { id: 'list', icon: LayoutDashboard, label: 'Extrato' },
     { id: 'add', icon: PlusCircle, label: 'Novo Gasto' },
-    { id: 'stats', icon: PieChart, label: 'Gráficos' }, // Vírgula adicionada aqui
+    { id: 'stats', icon: PieChart, label: 'Gráficos' }, 
     { id: 'shopping', icon: ShoppingCart, label: 'Compras' },
     { id: 'notes', icon: StickyNote, label: 'Notas' },
     { id: 'reminders', icon: Bell, label: 'Avisos' },
