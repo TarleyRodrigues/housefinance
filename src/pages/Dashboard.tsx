@@ -122,7 +122,6 @@ export default function Dashboard() {
 
   const chartData = categories.map(cat => ({ name: cat.name, value: expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0) })).filter(d => d.value > 0);
   
-  // Agrupamento para o gráfico por pessoa
   const userTotals = Object.values(expenses.reduce((acc: any, curr: any) => {
     const uid = curr.user_id;
     if (!acc[uid]) {
@@ -141,7 +140,6 @@ export default function Dashboard() {
 
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen bg-slate-50 font-sans">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><ChevronLeft className="text-slate-300" /></button>
         <div className="flex flex-col items-center">
@@ -153,7 +151,6 @@ export default function Dashboard() {
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}><ChevronRight className="text-slate-300" /></button>
       </div>
 
-      {/* TELA: EXTRATO */}
       {activeTab === 'list' && (
         <div className="space-y-4 animate-in fade-in">
           <div className="flex items-center gap-3 pb-1 overflow-x-auto no-scrollbar">
@@ -178,7 +175,7 @@ export default function Dashboard() {
 
           <div className="space-y-3">
             {expenses.filter(exp => !filterUserId || exp.user_id === filterUserId).filter(exp => !filterCategory || exp.category_name === filterCategory).map((exp) => (
-                <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100 group">
+                <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
                   <div className="flex items-center gap-3 flex-1 overflow-hidden">
                     <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name || 'U'}`} className="w-11 h-11 rounded-full border-2 border-white shadow-sm flex-shrink-0 object-cover" alt="" />
                     <div className="flex flex-col min-w-0">
@@ -187,11 +184,15 @@ export default function Dashboard() {
                       <span className="text-[9px] text-slate-400 font-bold uppercase">{exp.profiles?.full_name}</span>
                     </div>
                   </div>
-                  <div className="text-right ml-2">
-                    <span className="font-bold text-slate-900 text-sm">{formatCurrency(exp.amount)}</span>
-                    <div className="flex gap-2 justify-end mt-1 opacity-0 group-hover:opacity-100">
-                      <button onClick={() => { setEditingId(exp.id); setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount)); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); }} className="text-blue-500"><Edit2 size={14}/></button>
-                      <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400"><Trash2 size={14}/></button>
+                  <div className="text-right ml-2 shrink-0">
+                    <span className="font-bold text-slate-900 text-sm block mb-1">{formatCurrency(exp.amount)}</span>
+                    {/* BOTÕES SEMPRE VISÍVEIS PARA CELULAR */}
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => { 
+                        const formatted = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount);
+                        setEditingId(exp.id); setAmount(formatted); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); 
+                      }} className="text-blue-500 active:scale-90 transition-transform"><Edit2 size={16}/></button>
+                      <button onClick={async () => { if(confirm("Remover este gasto?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400 active:scale-90 transition-transform"><Trash2 size={16}/></button>
                     </div>
                   </div>
                 </div>
@@ -200,7 +201,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TELA: COMPRAS */}
+      {/* COMPRAS */}
       {activeTab === 'shopping' && (
         <div className="space-y-6 animate-in fade-in">
           <form onSubmit={async (e) => { e.preventDefault(); if(!newItem) return; await supabase.from('shopping_list').insert({ item_name: newItem, user_id: user.id }); setNewItem(''); fetchData(); }} className="flex gap-2">
@@ -226,7 +227,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TELA: LEMBRETES */}
+      {/* LEMBRETES */}
       {activeTab === 'reminders' && (
         <div className="space-y-6 animate-in fade-in">
           <form onSubmit={handleReminderSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
@@ -245,14 +246,14 @@ export default function Dashboard() {
                   <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 shrink-0"><Calendar size={20} /></div>
                   <div><p className="font-bold text-slate-800 text-sm">{rem.text}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{format(parseISO(rem.reminder_date), "dd/MM", { locale: ptBR })} {rem.reminder_time && ` às ${rem.reminder_time}`}</p></div>
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100"><button onClick={() => {setEditRemId(rem.id); setRemText(rem.text); setRemDate(rem.reminder_date); setRemTime(rem.reminder_time || '');}} className="text-blue-500"><Edit2 size={16}/></button><button onClick={async () => { if(confirm("Apagar?")) { await supabase.from('reminders').delete().eq('id', rem.id); fetchData(); } }} className="text-red-400"><Trash2 size={16}/></button></div>
+                <div className="flex gap-2"><button onClick={() => {setEditRemId(rem.id); setRemText(rem.text); setRemDate(rem.reminder_date); setRemTime(rem.reminder_time || '');}} className="text-blue-500"><Edit2 size={16}/></button><button onClick={async () => { if(confirm("Apagar?")) { await supabase.from('reminders').delete().eq('id', rem.id); fetchData(); } }} className="text-red-400"><Trash2 size={16}/></button></div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* TELA: ADICIONAR GASTO */}
+      {/* ADICIONAR GASTO */}
       {activeTab === 'add' && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 animate-in slide-in-from-bottom-4">
           <h3 className="font-bold text-slate-800">{editingId ? 'Editar Gasto' : 'Novo Gasto'}</h3>
@@ -269,10 +270,9 @@ export default function Dashboard() {
         </form>
       )}
 
-      {/* TELA: GRÁFICOS */}
+      {/* GRÁFICOS */}
       {activeTab === 'stats' && (
         <div className="space-y-6 animate-in fade-in pb-10">
-          {/* 1. Evolução Anual */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><BarChart3 size={14}/> Evolução Anual</h3>
             <div className="h-40 w-full">
@@ -282,7 +282,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 2. Gastos por Pessoa (Rosca) */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
             <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><Users size={14}/> Gastos por Pessoa</h3>
             <div className="h-56 w-full">
@@ -297,7 +296,6 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               ) : <p className="text-center text-slate-300 py-10 text-sm">Sem dados</p>}
             </div>
-            {/* Legenda com Foto */}
             <div className="mt-4 space-y-3">
               {userTotals.map((item: any, i: number) => (
                 <div key={i} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
@@ -311,9 +309,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 3. Distribuição Mensal */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><PieIcon size={14}/> Distribuição Mensal</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><PieIcon size={14}/> Gastos por Categoria</h3>
             <div className="h-56 w-full">
               {expenses.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -328,9 +325,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 4. Metas */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Metas do Mês</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Progresso das Metas</h3>
             <div className="space-y-6">
               {categories.map((cat) => {
                 const total = expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -351,7 +347,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* TELA: CONFIGURAÇÕES */}
+      {/* CONFIGURAÇÕES */}
       {activeTab === 'config' && (
         <div className="space-y-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
