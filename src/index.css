@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* index.css — Tailwind v3 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ESSENCIAL para Tailwind v4 — ativa dark mode por classe */
 @variant dark (&:where(.dark, .dark *));
