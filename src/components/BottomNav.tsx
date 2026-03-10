@@ -1,9 +1,10 @@
-import { LayoutDashboard, PlusCircle, Settings, ShoppingCart, Bell, StickyNote } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Settings, ShoppingCart, Bell, StickyNote, PieChart } from 'lucide-react';
 
 export default function BottomNav({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
   const tabs = [
     { id: 'list', icon: LayoutDashboard, label: 'Extrato' },
     { id: 'add', icon: PlusCircle, label: 'Novo Gasto' },
+    { id: 'stats', icon: PieChart, label: 'Gráficos' }, // Vírgula adicionada aqui
     { id: 'shopping', icon: ShoppingCart, label: 'Compras' },
     { id: 'notes', icon: StickyNote, label: 'Notas' },
     { id: 'reminders', icon: Bell, label: 'Avisos' },
@@ -20,7 +21,6 @@ export default function BottomNav({ activeTab, setActiveTab }: { activeTab: stri
             activeTab === tab.id ? 'text-blue-600 scale-110' : 'text-slate-400'
           }`}
         >
-          {/* Ícones aumentados para 26px */}
           <tab.icon size={26} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
           <span className={`text-[10px] font-black uppercase tracking-tighter ${
             activeTab === tab.id ? 'opacity-100' : 'opacity-50'
@@ -28,7 +28,6 @@ export default function BottomNav({ activeTab, setActiveTab }: { activeTab: stri
             {tab.label}
           </span>
           
-          {/* Indicador visual de aba ativa (bolinha embaixo) */}
           {activeTab === tab.id && (
             <div className="w-1 h-1 bg-blue-600 rounded-full mt-0.5" />
           )}
