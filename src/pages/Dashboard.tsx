@@ -39,7 +39,7 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Estados de formulários e Filtros
+  // Estados Gerais
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
@@ -62,7 +62,6 @@ export default function Dashboard() {
     fetchData();
   }, [currentDate, activeTab]);
 
-  // CÁLCULO DO RESUMO INTELIGENTE (TOP CARD)
   const stats = useMemo(() => {
     const totalMonth = expenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
     const filtered = expenses
@@ -135,13 +134,22 @@ export default function Dashboard() {
     finally { setIsLoading(false); }
   }
 
-  // --- HANDLERS ---
+  // --- HANDLERS DAS NOTAS ---
   const saveNote = async () => {
     if (!noteTitle) return;
     const payload = { title: noteTitle, content: noteContent, user_id: user.id };
     if (editingNoteId) await supabase.from('notes').update(payload).eq('id', editingNoteId);
     else await supabase.from('notes').insert(payload);
     setNoteTitle(''); setNoteContent(''); setEditingNoteId(null); setIsNoteEditorOpen(false); fetchData();
+  };
+
+  // ESTA FUNÇÃO ESTAVA FALTANDO NO SEU ARQUIVO:
+  const deleteNote = async (id: string) => {
+    if (confirm("Apagar esta anotação permanentemente?")) {
+      await supabase.from('notes').delete().eq('id', id);
+      setIsNoteEditorOpen(false);
+      fetchData();
+    }
   };
 
   const handleReminderSubmit = async (e: React.FormEvent) => {
@@ -155,12 +163,8 @@ export default function Dashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const numericAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
-    if (editingId) {
-      // CORREÇÃO: Mantém autor original ao editar
-      await supabase.from('expenses').update({ amount: numericAmount, category_name: category, description }).eq('id', editingId);
-    } else {
-      await supabase.from('expenses').insert({ amount: numericAmount, category_name: category, description, user_id: user.id });
-    }
+    if (editingId) await supabase.from('expenses').update({ amount: numericAmount, category_name: category, description }).eq('id', editingId);
+    else await supabase.from('expenses').insert({ amount: numericAmount, category_name: category, description, user_id: user.id });
     setAmount(''); setCategory(''); setDescription(''); setEditingId(null); setActiveTab('list'); fetchData();
   };
 
@@ -177,7 +181,7 @@ export default function Dashboard() {
 
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen bg-slate-50 font-sans selection:bg-blue-100 overflow-x-hidden">
-      {/* Header Fixo */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><ChevronLeft className="text-slate-300" /></button>
         <div className="flex flex-col items-center">
@@ -198,10 +202,8 @@ export default function Dashboard() {
           transition={{ duration: 0.2 }}
         >
 
-          {/* TELA: EXTRATO FINANCEIRO */}
           {activeTab === 'list' && (
             <div className="space-y-4">
-              {/* Card de Resumo Dinâmico */}
               <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-[2rem] shadow-xl shadow-blue-100 text-white relative overflow-hidden">
                 <div className="relative z-10">
                   <div className="flex justify-between items-start mb-1">
@@ -211,14 +213,13 @@ export default function Dashboard() {
                   <h1 className="text-4xl font-black tracking-tighter">{formatCurrency(stats.totalFiltered)}</h1>
                   {(filterUserId || filterCategory) && (
                     <p className="text-[9px] mt-2 font-black uppercase tracking-widest opacity-80 bg-white/10 inline-block px-2 py-1 rounded-lg border border-white/10">
-                      Total do Mês: {formatCurrency(stats.totalMonth)}
+                      Mês todo: {formatCurrency(stats.totalMonth)}
                     </p>
                   )}
                 </div>
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
               </div>
 
-              {/* Filtros */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
                   <button onClick={() => setFilterUserId(null)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase transition-all ${!filterUserId ? 'bg-slate-800 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100'}`}>Todos</button>
@@ -240,7 +241,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Listagem com Skeletons */}
               <div className="space-y-3 pb-4">
                 {isLoading ? [1,2,3,4].map(i => <SkeletonCard key={i} />) : 
                   expenses.filter(exp => !filterUserId || exp.user_id === filterUserId).filter(exp => !filterCategory || exp.category_name === filterCategory).map((exp) => (
@@ -256,8 +256,11 @@ export default function Dashboard() {
                         <div className="text-right ml-2 shrink-0">
                           <span className="font-black text-slate-900 text-sm block mb-1">{formatCurrency(exp.amount)}</span>
                           <div className="flex gap-3 justify-end">
-                            <button onClick={() => { setEditingId(exp.id); setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount)); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); }} className="text-blue-500 active:scale-90 transition-transform"><Edit2 size={16}/></button>
-                            <button onClick={async () => { if(confirm("Remover este gasto?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400 active:scale-90 transition-transform"><Trash2 size={16}/></button>
+                            <button onClick={() => { 
+                              const formatted = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount);
+                              setEditingId(exp.id); setAmount(formatted); setCategory(exp.category_name); setDescription(exp.description); setActiveTab('add'); 
+                            }} className="text-blue-500 active:scale-90 transition-transform"><Edit2 size={16}/></button>
+                            <button onClick={async () => { if(confirm("Remover?")) { await supabase.from('expenses').update({ is_deleted: true }).eq('id', exp.id); fetchData(); } }} className="text-red-400 active:scale-90 transition-transform"><Trash2 size={16}/></button>
                           </div>
                         </div>
                       </motion.div>
@@ -266,7 +269,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TELA: COMPRAS */}
           {activeTab === 'shopping' && (
             <div className="space-y-6">
               <form onSubmit={async (e) => { e.preventDefault(); if(!newItem) return; await supabase.from('shopping_list').insert({ item_name: newItem, user_id: user.id }); setNewItem(''); fetchData(); }} className="flex gap-2">
@@ -289,7 +291,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TELA: NOTAS */}
           {activeTab === 'notes' && (
             <div className="space-y-4">
               <button onClick={() => { setEditingNoteId(null); setNoteTitle(''); setNoteContent(''); setIsNoteEditorOpen(true); }} className="w-full p-5 bg-amber-400 text-slate-900 rounded-[2rem] font-black shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all uppercase text-xs tracking-widest"><Plus size={20} strokeWidth={3} /> Criar Anotação</button>
@@ -299,7 +300,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4 overflow-hidden">
                       <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 shrink-0"><StickyNote size={24} /></div>
                       <div className="overflow-hidden">
-                        <p className="font-black text-slate-800 truncate uppercase tracking-tighter">{note.title}</p>
+                        <p className="font-black text-slate-800 truncate uppercase tracking-tighter text-sm">{note.title}</p>
                         <p className="text-[9px] text-slate-300 uppercase font-black tracking-widest">{format(parseISO(note.created_at), "dd MMM yyyy", { locale: ptBR })}</p>
                       </div>
                     </div>
@@ -310,7 +311,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TELA: AVISOS (LEMBRETES) */}
           {activeTab === 'reminders' && (
             <div className="space-y-6 animate-in fade-in">
               <form onSubmit={handleReminderSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
@@ -336,7 +336,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TELA: NOVO GASTO */}
           {activeTab === 'add' && (
             <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 space-y-6">
               <div className="flex items-center gap-3 text-blue-600 mb-2"><Plus size={24} strokeWidth={3} /><h3 className="font-black text-xl uppercase tracking-tighter">{editingId ? 'Editar Registro' : 'Novo Registro'}</h3></div>
@@ -349,39 +348,15 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TELA: GRÁFICOS */}
           {activeTab === 'stats' && (
             <div className="space-y-6 pb-10">
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"><h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><BarChart3 size={14}/> Evolução Anual</h3><div className="h-40 w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={annualChartData}><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} /><Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none'}} /><Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div></div>
-              
-              {/* Gráfico por Pessoa */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><Users size={14}/> Gastos por Pessoa</h3>
-                <div className="h-56 w-full">{expenses.length > 0 ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={userTotals} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">{userTotals.map((_, i) => <Cell key={i} fill={USER_COLORS[i % USER_COLORS.length]} />)}</Pie><Tooltip formatter={(v: any) => formatCurrency(v)} /></PieChart></ResponsiveContainer> : <p className="text-center text-slate-300 py-10 text-sm italic">Sem dados</p>}</div>
-                <div className="mt-4 space-y-3">{userTotals.map((item: any, i: number) => (<div key={i} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100"><div className="flex items-center gap-3"><img src={item.avatar || `https://ui-avatars.com/api/?name=${item.name}`} className="w-8 h-8 rounded-full object-cover border-2 border-white" /><span className="text-xs font-bold text-slate-700 uppercase">{item.name.split(' ')[0]}</span></div><span className="font-black text-slate-900 text-sm">{formatCurrency(item.value)}</span></div>))}</div>
-              </div>
-
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"><h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><Users size={14}/> Gastos por Pessoa</h3><div className="h-56 w-full">{expenses.length > 0 ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={userTotals} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">{userTotals.map((_, i) => <Cell key={i} fill={USER_COLORS[i % USER_COLORS.length]} />)}</Pie><Tooltip formatter={(v: any) => formatCurrency(v)} /></PieChart></ResponsiveContainer> : <p className="text-center text-slate-300 py-10 text-sm italic">Sem dados</p>}</div><div className="mt-4 space-y-3">{userTotals.map((item: any, i: number) => (<div key={i} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100"><div className="flex items-center gap-3"><img src={item.avatar || `https://ui-avatars.com/api/?name=${item.name}`} className="w-8 h-8 rounded-full object-cover border-2 border-white" /><span className="text-xs font-bold text-slate-700 uppercase">{item.name.split(' ')[0]}</span></div><span className="font-black text-slate-900 text-sm">{formatCurrency(item.value)}</span></div>))}</div></div>
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"><h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><PieIcon size={14}/> Distribuição Mensal</h3><div className="h-56 w-full">{expenses.length > 0 ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chartData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" isAnimationActive={true}>{chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip formatter={(v: any) => formatCurrency(v)} /></PieChart></ResponsiveContainer> : <p className="text-center text-slate-300 py-10 text-sm italic">Sem gastos</p>}</div></div>
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Progresso das Metas</h3>
-                <div className="space-y-6">
-                  {categories.map((cat) => {
-                    const total = expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    const meta = Number(cat.monthly_goal) || 0;
-                    const barMax = Math.max(total, meta);
-                    const blueWidth = barMax > 0 ? (Math.min(total, meta) / barMax) * 100 : 0;
-                    const redWidth = (barMax > 0 && total > meta) ? ((total - meta) / barMax) * 100 : 0;
-                    const isOver = meta > 0 && total > meta;
-                    return (
-                      <div key={cat.id} className="space-y-1.5"><div className="flex justify-between text-[11px] font-bold"><span className="text-slate-700">{cat.name}</span><span className={isOver ? 'text-red-500' : 'text-slate-400'}>{formatCurrency(total)} / <span className="text-slate-500 font-extrabold">{formatCurrency(meta)}</span></span></div><div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex"><div className={`h-full transition-all duration-700 ${total >= meta && meta > 0 ? 'bg-blue-600' : 'bg-blue-400'}`} style={{ width: `${blueWidth}%` }} /><div className="h-full bg-red-500 transition-all duration-700 shadow-[0_0_8px_rgba(239,68,68,0.4)]" style={{ width: `${redWidth}%` }} /></div></div>
-                    );
-                  })}
-                </div>
-              </div>
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"><h3 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Progresso das Metas</h3><div className="space-y-6">{categories.map((cat) => { const total = expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0); const meta = Number(cat.monthly_goal) || 0; const barMax = Math.max(total, meta); const blueWidth = barMax > 0 ? (Math.min(total, meta) / barMax) * 100 : 0; const redWidth = (barMax > 0 && total > meta) ? ((total - meta) / barMax) * 100 : 0; const isOver = meta > 0 && total > meta; return (<div key={cat.id} className="space-y-1.5"><div className="flex justify-between text-[11px] font-bold"><span className="text-slate-700">{cat.name}</span><span className={isOver ? 'text-red-500' : 'text-slate-400'}>{formatCurrency(total)} / <span className="text-slate-500 font-extrabold">{formatCurrency(meta)}</span></span></div><div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex"><div className={`h-full transition-all duration-700 ${total >= meta && meta > 0 ? 'bg-blue-600' : 'bg-blue-400'}`} style={{ width: `${blueWidth}%` }} /><div className="h-full bg-red-500 transition-all duration-700 shadow-[0_0_8px_rgba(239,68,68,0.4)]" style={{ width: `${redWidth}%` }} /></div></div>);})}</div></div>
             </div>
           )}
 
-          {/* TELA: AJUSTES */}
           {activeTab === 'config' && (
             <div className="space-y-6">
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4"><img src={userProfile?.avatar_url || `https://ui-avatars.com/api/?name=${user?.email}`} className="w-16 h-16 rounded-full border-2 border-white shadow-sm object-cover" alt="" /><div className="flex-1"><p className="font-bold text-slate-800">{userProfile?.full_name || 'Meu Perfil'}</p><button onClick={() => window.location.hash = '/profile'} className="text-blue-600 text-sm font-semibold">Editar Perfil →</button></div></div>
@@ -393,14 +368,13 @@ export default function Dashboard() {
         </motion.div>
       </AnimatePresence>
 
-      {/* MODAL EDITOR DE NOTAS */}
       <AnimatePresence>
         {isNoteEditorOpen && (
           <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="fixed inset-0 bg-white z-[100] flex flex-col p-6">
-            <div className="flex items-center justify-between mb-8"><button onClick={() => setIsNoteEditorOpen(false)} className="p-3 bg-slate-100 rounded-full text-slate-500 active:scale-90"><X size={24}/></button><h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm">{editingNoteId ? 'Editando Nota' : 'Nova Nota'}</h3><button onClick={saveNote} className="p-3 bg-blue-600 rounded-full text-white shadow-lg active:scale-90"><Save size={24}/></button></div>
-            <input className="text-3xl font-black text-slate-800 outline-none placeholder:text-slate-100 mb-6" placeholder="Título..." value={noteTitle} onChange={e => setNoteTitle(e.target.value)} />
-            <textarea className="flex-1 w-full outline-none text-slate-600 text-lg leading-relaxed resize-none" placeholder="Escreva aqui..." value={noteContent} onChange={e => setNoteContent(e.target.value)} />
-            {editingNoteId && <button onClick={() => deleteNote(editingNoteId)} className="mt-4 p-4 text-red-400 font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 border-2 border-red-50 rounded-2xl active:bg-red-50"><Trash2 size={14}/> Apagar nota</button>}
+            <div className="flex items-center justify-between mb-8"><button onClick={() => setIsNoteEditorOpen(false)} className="p-3 bg-slate-100 rounded-full text-slate-500 active:scale-90 transition-all"><X size={24}/></button><h3 className="font-black text-slate-800 uppercase tracking-tighter text-sm">{editingNoteId ? 'Editando Nota' : 'Nova Nota'}</h3><button onClick={saveNote} className="p-3 bg-blue-600 rounded-full text-white shadow-lg shadow-blue-100 active:scale-90 transition-all"><Save size={24}/></button></div>
+            <input className="text-3xl font-black text-slate-800 outline-none placeholder:text-slate-100 mb-6 bg-transparent" placeholder="Dê um título..." value={noteTitle} onChange={e => setNoteTitle(e.target.value)} />
+            <textarea className="flex-1 w-full outline-none text-slate-600 text-lg leading-relaxed resize-none bg-transparent" placeholder="Comece a escrever..." value={noteContent} onChange={e => setNoteContent(e.target.value)} />
+            {editingNoteId && <button onClick={() => deleteNote(editingNoteId)} className="mt-4 p-4 text-red-400 font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 border-2 border-red-50 rounded-2xl active:bg-red-50"><Trash2 size={14}/> Apagar esta nota</button>}
           </motion.div>
         )}
       </AnimatePresence>
@@ -410,38 +384,19 @@ export default function Dashboard() {
   );
 }
 
-// COMPONENTE GESTOR DE CATEGORIAS
 function CategoryManager({ categories, refresh, formatCurrency }: any) {
   const [newCat, setNewCat] = useState('');
-  const addCategory = async () => {
-    if (!newCat) return;
-    await supabase.from('categories').insert({ name: newCat });
-    setNewCat(''); refresh();
-  };
-  const handleNameChange = async (id: string, oldName: string, newName: string) => {
-    if (newName === oldName || !newName) return;
-    await supabase.from('categories').update({ name: newName }).eq('id', id);
-    await supabase.from('expenses').update({ category_name: newName }).eq('category_name', oldName);
-    refresh();
-  };
-  const handleMetaChange = async (id: string, inputValue: string) => {
-    const numericValue = parseFloat(inputValue.replace(/[R$\s.]/g, '').replace(',', '.'));
-    if (!isNaN(numericValue)) {
-      await supabase.from('categories').update({ monthly_goal: numericValue }).eq('id', id);
-      refresh();
-    }
-  };
+  const addCategory = async () => { if (!newCat) return; await supabase.from('categories').insert({ name: newCat }); setNewCat(''); refresh(); };
+  const handleNameChange = async (id: string, oldName: string, newName: string) => { if (newName === oldName || !newName) return; await supabase.from('categories').update({ name: newName }).eq('id', id); await supabase.from('expenses').update({ category_name: newName }).eq('category_name', oldName); refresh(); };
+  const handleMetaChange = async (id: string, inputValue: string) => { const numericValue = parseFloat(inputValue.replace(/[R$\s.]/g, '').replace(',', '.')); if (!isNaN(numericValue)) { await supabase.from('categories').update({ monthly_goal: numericValue }).eq('id', id); refresh(); } };
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <input className="flex-1 p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm outline-none font-bold" placeholder="Nova categoria..." value={newCat} onChange={e => setNewCat(e.target.value)} />
-        <button onClick={addCategory} className="bg-blue-600 text-white p-3 rounded-xl shadow-md active:scale-90 transition-all"><Plus size={20}/></button>
-      </div>
+      <div className="flex gap-2"><input className="flex-1 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-sm outline-none font-bold" placeholder="Nova categoria..." value={newCat} onChange={e => setNewCat(e.target.value)} /><button onClick={addCategory} className="bg-blue-600 text-white p-3 rounded-xl shadow-lg active:scale-90 transition-all"><Plus size={20}/></button></div>
       <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
         {categories.map((c: any) => (
-          <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
-            <div className="flex justify-between items-center"><input type="text" className="bg-transparent text-sm font-black text-slate-700 outline-none uppercase tracking-tighter w-full border-b border-transparent focus:border-slate-300" defaultValue={c.name} onBlur={(e) => handleNameChange(c.id, c.name, e.target.value)} /><button onClick={async () => { if(confirm("Apagar categoria?")) { await supabase.from('categories').delete().eq('id', c.id); refresh(); } }} className="text-slate-300 ml-2 hover:text-red-500"><Trash2 size={14}/></button></div>
-            <div className="flex flex-col gap-1 bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm"><label className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Meta Mensal</label><input type="text" className="bg-transparent text-sm font-black text-blue-600 outline-none w-full" defaultValue={formatCurrency(c.monthly_goal || 0)} onBlur={(e) => handleMetaChange(c.id, e.target.value)} onFocus={(e) => e.target.value = (c.monthly_goal || 0).toString()} /></div>
+          <div key={c.id} className="p-4 bg-slate-50 rounded-3xl border border-slate-100 space-y-3 shadow-sm">
+            <div className="flex justify-between items-center"><input type="text" className="bg-transparent text-sm font-black text-slate-700 outline-none uppercase tracking-tighter w-full border-b border-transparent focus:border-slate-300" defaultValue={c.name} onBlur={(e) => handleNameChange(c.id, c.name, e.target.value)} /><button onClick={async () => { if(confirm("Apagar categoria?")) { await supabase.from('categories').delete().eq('id', c.id); refresh(); } }} className="text-slate-300 ml-2 hover:text-red-500"><Trash2 size={16}/></button></div>
+            <div className="flex flex-col gap-1 bg-white p-3 rounded-2xl border border-slate-100 shadow-inner"><label className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Meta Mensal</label><input type="text" className="bg-transparent text-base font-black text-blue-600 outline-none w-full" defaultValue={formatCurrency(c.monthly_goal || 0)} onBlur={(e) => handleMetaChange(c.id, e.target.value)} onFocus={(e) => e.target.value = (c.monthly_goal || 0).toString()} /></div>
           </div>
         ))}
       </div>
