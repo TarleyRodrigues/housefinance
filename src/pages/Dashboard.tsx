@@ -9,7 +9,7 @@ import {
   Trash2, Edit2, ChevronLeft, ChevronRight, Plus, X, LogOut, 
   Target, PieChart as PieIcon, BarChart3, RefreshCcw, 
   CheckCircle2, Circle, Bell, Calendar, Clock, ShoppingCart, 
-  Filter, Users 
+  Filter, Users, StickyNote, ChevronRight as ChevronNext, Save
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -19,19 +19,18 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<any[]>([]);
   const [shoppingList, setShoppingList] = useState<any[]>([]);
   const [reminders, setReminders] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]); // ESTADO NOTAS
   const [annualChartData, setAnnualChartData] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Estados de formulários
+  // Estados Gerais
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  // Filtros
   const [filterUserId, setFilterUserId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
 
@@ -40,6 +39,12 @@ export default function Dashboard() {
   const [remDate, setRemDate] = useState('');
   const [remTime, setRemTime] = useState('');
   const [editRemId, setEditRemId] = useState<string | null>(null);
+
+  // Estados das Notas
+  const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -74,6 +79,12 @@ export default function Dashboard() {
         if (profiles && profiles.length > 0) setUserProfile(profiles[0]);
       }
 
+      // BUSCA NOTAS
+      if (activeTab === 'notes') {
+        const { data: nts } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+        if (nts) setNotes(nts);
+      }
+
       const startM = startOfMonth(currentDate).toISOString();
       const endM = endOfMonth(currentDate).toISOString();
 
@@ -101,6 +112,26 @@ export default function Dashboard() {
     } catch (error) { console.error(error); }
   }
 
+  // --- HANDLERS NOTAS ---
+  const saveNote = async () => {
+    if (!noteTitle) return;
+    const payload = { title: noteTitle, content: noteContent, user_id: user.id };
+    if (editingNoteId) {
+      await supabase.from('notes').update(payload).eq('id', editingNoteId);
+    } else {
+      await supabase.from('notes').insert(payload);
+    }
+    setNoteTitle(''); setNoteContent(''); setEditingNoteId(null); setIsNoteEditorOpen(false); fetchData();
+  };
+
+  const deleteNote = async (id: string) => {
+    if (confirm("Apagar esta anotação permanentemente?")) {
+      await supabase.from('notes').delete().eq('id', id);
+      setIsNoteEditorOpen(false);
+      fetchData();
+    }
+  };
+
   const handleReminderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = { text: remText, reminder_date: remDate, reminder_time: remTime, user_id: user.id };
@@ -121,16 +152,9 @@ export default function Dashboard() {
   };
 
   const chartData = categories.map(cat => ({ name: cat.name, value: expenses.filter(e => e.category_name === cat.name).reduce((acc, curr) => acc + Number(curr.amount), 0) })).filter(d => d.value > 0);
-  
   const userTotals = Object.values(expenses.reduce((acc: any, curr: any) => {
     const uid = curr.user_id;
-    if (!acc[uid]) {
-      acc[uid] = { 
-        name: curr.profiles?.full_name || 'Usuário', 
-        avatar: curr.profiles?.avatar_url,
-        value: 0 
-      };
-    }
+    if (!acc[uid]) acc[uid] = { name: curr.profiles?.full_name || 'Usuário', avatar: curr.profiles?.avatar_url, value: 0 };
     acc[uid].value += Number(curr.amount);
     return acc;
   }, {}));
@@ -140,6 +164,7 @@ export default function Dashboard() {
 
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen bg-slate-50 font-sans">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}><ChevronLeft className="text-slate-300" /></button>
         <div className="flex flex-col items-center">
@@ -151,6 +176,72 @@ export default function Dashboard() {
         <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}><ChevronRight className="text-slate-300" /></button>
       </div>
 
+      {/* TELA: ANOTAÇÕES (NOVA) */}
+      {activeTab === 'notes' && (
+        <div className="space-y-4 animate-in fade-in">
+          <button 
+            onClick={() => { setEditingNoteId(null); setNoteTitle(''); setNoteContent(''); setIsNoteEditorOpen(true); }}
+            className="w-full p-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
+          >
+            <Plus size={20} /> Nova Anotação
+          </button>
+
+          <div className="grid grid-cols-1 gap-3">
+            {notes.map((note) => (
+              <button 
+                key={note.id}
+                onClick={() => { setEditingNoteId(note.id); setNoteTitle(note.title); setNoteContent(note.content); setIsNoteEditorOpen(true); }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-left flex items-center justify-between group active:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 shrink-0">
+                    <StickyNote size={20} />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="font-bold text-slate-800 truncate">{note.title}</p>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">{format(parseISO(note.created_at), "dd/MM/yy")}</p>
+                  </div>
+                </div>
+                <ChevronNext size={16} className="text-slate-300" />
+              </button>
+            ))}
+          </div>
+
+          {/* EDITOR DE NOTAS (OVERLAY MOBILE) */}
+          {isNoteEditorOpen && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex flex-col p-4">
+              <div className="bg-white rounded-3xl flex-1 flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-10">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                  <button onClick={() => setIsNoteEditorOpen(false)} className="p-2 text-slate-400"><X size={24}/></button>
+                  <h3 className="font-bold text-slate-800">{editingNoteId ? 'Editar Nota' : 'Nova Nota'}</h3>
+                  <button onClick={saveNote} className="p-2 text-blue-600"><Save size={24}/></button>
+                </div>
+                <div className="p-6 flex-1 flex flex-col gap-4">
+                  <input 
+                    className="text-xl font-black text-slate-800 outline-none placeholder:text-slate-200" 
+                    placeholder="Título da nota..." 
+                    value={noteTitle} onChange={e => setNoteTitle(e.target.value)}
+                  />
+                  <textarea 
+                    className="flex-1 w-full outline-none text-slate-600 leading-relaxed resize-none placeholder:text-slate-200" 
+                    placeholder="Escreva aqui as informações importantes, senhas ou listas de filmes..."
+                    value={noteContent} onChange={e => setNoteContent(e.target.value)}
+                  />
+                </div>
+                {editingNoteId && (
+                  <div className="p-4 bg-slate-50 flex justify-center">
+                    <button onClick={() => deleteNote(editingNoteId)} className="flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-widest">
+                      <Trash2 size={14}/> Apagar Nota
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TELA: EXTRATO */}
       {activeTab === 'list' && (
         <div className="space-y-4 animate-in fade-in">
           <div className="flex items-center gap-3 pb-1 overflow-x-auto no-scrollbar">
@@ -175,7 +266,7 @@ export default function Dashboard() {
 
           <div className="space-y-3">
             {expenses.filter(exp => !filterUserId || exp.user_id === filterUserId).filter(exp => !filterCategory || exp.category_name === filterCategory).map((exp) => (
-                <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
+                <div key={exp.id} className="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100 group active:bg-slate-50">
                   <div className="flex items-center gap-3 flex-1 overflow-hidden">
                     <img src={exp.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${exp.profiles?.full_name || 'U'}`} className="w-11 h-11 rounded-full border-2 border-white shadow-sm flex-shrink-0 object-cover" alt="" />
                     <div className="flex flex-col min-w-0">
@@ -186,7 +277,6 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right ml-2 shrink-0">
                     <span className="font-bold text-slate-900 text-sm block mb-1">{formatCurrency(exp.amount)}</span>
-                    {/* BOTÕES SEMPRE VISÍVEIS PARA CELULAR */}
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => { 
                         const formatted = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(exp.amount);
@@ -310,7 +400,7 @@ export default function Dashboard() {
           </div>
 
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><PieIcon size={14}/> Gastos por Categoria</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2"><PieIcon size={14}/> Distribuição Mensal</h3>
             <div className="h-56 w-full">
               {expenses.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
