@@ -9,3 +9,13 @@
     scrollbar-width: none;
   }
 }
+
+@theme {
+  --color-dark-bg: #0f172a;
+  --color-dark-card: #1e293b;
+}
+
+.dark {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
