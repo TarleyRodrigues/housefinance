@@ -79,41 +79,56 @@ export function TabAvisos({ reminders, fetchData, showToast }: Props) {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4 transition-colors">
-        <h3 className="font-black text-slate-800 dark:text-slate-200 flex items-center gap-2 text-sm uppercase tracking-tighter">
-          <Bell size={16} className="text-blue-500" /> {editRemId ? 'Editar Aviso' : 'Novo Aviso'}
-        </h3>
-        <input
-          className="w-full p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-slate-800 dark:text-white"
-          placeholder="Lembrar de?"
-          required
-          value={remText}
-          onChange={(e) => setRemText(e.target.value)}
-        />
-        <div className="grid grid-cols-12 gap-2">
-          <div className="col-span-7 relative min-w-0">
-            <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="date"
-              required
-              className="w-full p-3.5 pl-9 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-[13px] text-slate-800 dark:text-white appearance-none"
-              value={remDate}
-              onChange={(e) => setRemDate(e.target.value)}
-            />
-          </div>
-          <div className="w-32 relative">
-            <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="time"
-              className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-sm text-slate-800 dark:text-white"
-              value={remTime}
-              onChange={(e) => setRemTime(e.target.value)}
-            />
-          </div>
-        </div>
-        <button className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase tracking-widest text-xs">
-          Confirmar
-        </button>
-      </form>
+  <h3 className="font-black text-slate-800 dark:text-slate-200 flex items-center gap-2 text-sm uppercase tracking-tighter">
+    <Bell size={16} className="text-blue-500" /> {editRemId ? 'Editar Aviso' : 'Novo Aviso'}
+  </h3>
+  
+  <input
+    className="w-full p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-slate-800 dark:text-white font-medium"
+    placeholder="Lembrar de?"
+    required
+    value={remText}
+    onChange={(e) => setRemText(e.target.value)}
+  />
+
+  {/* Campos de Data e Hora Empilhados para iPhone */}
+  <div className="space-y-3">
+    <div className="relative">
+      <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+      <input
+        type="date"
+        required
+        className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-sm text-slate-800 dark:text-white appearance-none"
+        value={remDate}
+        onChange={(e) => setRemDate(e.target.value)}
+      />
+    </div>
+    
+    <div className="relative">
+      <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+      <input
+        type="time"
+        className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-sm text-slate-800 dark:text-white appearance-none"
+        value={remTime}
+        onChange={(e) => setRemTime(e.target.value)}
+      />
+    </div>
+  </div>
+
+  <button className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all uppercase tracking-widest text-xs">
+    Confirmar
+  </button>
+  
+  {editRemId && (
+    <button 
+      type="button" 
+      onClick={() => {setEditRemId(null); setRemText(''); setRemDate(''); setRemTime('');}} 
+      className="w-full text-[10px] text-slate-400 font-bold uppercase tracking-tighter"
+    >
+      Cancelar Edição
+    </button>
+  )}
+</form>
 
       <div className="space-y-3 pb-10">
         {reminders.map((rem) => {
