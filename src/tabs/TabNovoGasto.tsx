@@ -1,11 +1,11 @@
 // ─── ABA: NOVO GASTO / EDITAR ────────────────────────────────────────────────
-// Formulário para adicionar ou editar uma despesa
+// Formulário para adicionar ou editar uma despesa com registro de auditoria (Logs)
 
 import { useState, useEffect } from 'react';
 import { Loader2, Image as ImageIcon, X } from 'lucide-react';
 import { supabase } from '../supabase';
 import { useAuth } from '../AuthContext';
-import { handleCurrencyInput, parseAmount } from '../utils';
+import { handleCurrencyInput, parseAmount, formatCurrency } from '../utils';
 import type { Category, Expense } from '../types';
 
 interface Props {
@@ -56,20 +56,52 @@ export function TabNovoGasto({ categories, editingExpense, fetchData, showToast,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
+    const numericAmount = parseAmount(amount);
+    const itemDesc = description || 'Gasto sem descrição';
+    
     const payload = {
-      amount: parseAmount(amount),
+      amount: numericAmount,
       category_name: category,
-      description,
+      description: itemDesc,
       receipt_url: receiptUrl,
     };
-    if (editingExpense) {
-      await supabase.from('expenses').update(payload).eq('id', editingExpense.id);
-    } else {
-      await supabase.from('expenses').insert({ ...payload, user_id: user.id });
+
+    try {
+      if (editingExpense) {
+        // 1. Atualiza a Despesa
+        const { error: expError } = await supabase.from('expenses').update(payload).eq('id', editingExpense.id);
+        if (expError) throw expError;
+
+        // 2. Registra o Log de Edição
+        await supabase.from('logs').insert({
+          user_id: user.id,
+          action: 'UPDATE',
+          item_description: itemDesc,
+          details: `Valor alterado para ${formatCurrency(numericAmount)} na categoria ${category}`
+        });
+
+      } else {
+        // 1. Insere a nova Despesa
+        const { error: expError } = await supabase.from('expenses').insert({ ...payload, user_id: user.id });
+        if (expError) throw expError;
+
+        // 2. Registra o Log de Inserção
+        await supabase.from('logs').insert({
+          user_id: user.id,
+          action: 'INSERT',
+          item_description: itemDesc,
+          details: `Inseriu novo gasto de ${formatCurrency(numericAmount)}`
+        });
+      }
+
+      showToast('Salvo com sucesso!');
+      fetchData();
+      onSaved();
+    } catch (err: any) {
+      alert("Erro ao processar: " + err.message);
     }
-    showToast('Salvo com sucesso!');
-    fetchData();
-    onSaved();
   };
 
   return (
@@ -110,7 +142,7 @@ export function TabNovoGasto({ categories, editingExpense, fetchData, showToast,
         <input
           type="text"
           placeholder="O que você comprou?"
-          className="w-full p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200"
+          className="w-full p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200 font-medium"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />

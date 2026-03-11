@@ -11,12 +11,13 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const { user } = useAuth();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [prevMonthExpenses, setPrevMonthExpenses] = useState<Expense[]>([]); // NOVO: Para comparativo de categorias
+  const [prevMonthExpenses, setPrevMonthExpenses] = useState<Expense[]>([]);
   const [prevMonthTotal, setPrevMonthTotal] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [logs, setLogs] = useState<any[]>([]); // <-- ADICIONE ESTA LINHA
   const [annualChartData, setAnnualChartData] = useState<{ name: string; total: number }[]>([]);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,21 +35,25 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
       // 2. Buscar Perfil do Usuário
       if (user) {
-        const { data: p } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+        const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (p) setUserProfile(p);
       }
 
-      // Configuração de Datas (Mês Atual e Anterior)
+      // 3. Buscar Histórico de Logs (Ajustado)
+      const { data: logData } = await supabase
+        .from('logs')
+        .select('*, profiles(full_name)')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (logData) setLogs(logData);
+
+      // Configuração de Datas
       const startM = startOfMonth(currentDate).toISOString();
       const endM = endOfMonth(currentDate).toISOString();
       const startPrev = startOfMonth(subMonths(currentDate, 1)).toISOString();
       const endPrev = endOfMonth(subMonths(currentDate, 1)).toISOString();
 
-      // 3. Buscar Dados do Mês ANTERIOR (Completo para o comparativo de categorias)
+      // 4. Buscar Dados do Mês ANTERIOR
       const { data: prevExps } = await supabase
         .from('expenses')
         .select('amount, category_name')
@@ -60,13 +65,13 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       setPrevMonthExpenses(pExps as any);
       setPrevMonthTotal(pExps.reduce((acc, curr) => acc + Number(curr.amount), 0));
 
-      // 4. Buscar Anotações (Se a aba estiver ativa)
+      // 5. Buscar Anotações
       if (activeTab === 'notes') {
         const { data: n } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
         setNotes(n || []);
       }
 
-      // 5. Buscar Lembretes (Se a aba estiver ativa)
+      // 6. Buscar Lembretes
       if (activeTab === 'reminders') {
         const { data: r } = await supabase
           .from('reminders')
@@ -77,7 +82,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setReminders(r || []);
       }
 
-      // 6. Buscar Lista de Compras (Se a aba estiver ativa)
+      // 7. Buscar Lista de Compras
       if (activeTab === 'shopping') {
         const { data: s } = await supabase
           .from('shopping_list')
@@ -87,7 +92,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setShoppingList(s || []);
       }
 
-      // 7. Buscar Gastos do Mês Atual
+      // 8. Buscar Gastos do Mês Atual
       const { data: exps } = await supabase
         .from('expenses')
         .select('*, profiles(full_name, avatar_url)')
@@ -97,7 +102,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         .order('created_at', { ascending: false });
       setExpenses(exps || []);
 
-      // 8. Gráfico anual (Busca otimizada do ano inteiro)
+      // 9. Gráfico anual
       const startY = new Date(currentDate.getFullYear(), 0, 1).toISOString();
       const endY = new Date(currentDate.getFullYear(), 11, 31).toISOString();
       const { data: ann } = await supabase
@@ -125,12 +130,13 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
   return {
     expenses, 
-    prevMonthExpenses, // Agora retornado para uso na TabGraficos
+    prevMonthExpenses, 
     prevMonthTotal, 
     categories, 
     shoppingList,
     reminders, 
     notes, 
+    logs, // <-- ADICIONE ESTA LINHA
     annualChartData, 
     userProfile, 
     isLoading,

@@ -1,5 +1,5 @@
 // ─── DASHBOARD.TSX ───────────────────────────────────────────────────────────
-// Arquivo orquestrador — apenas gerencia estado global e renderiza as abas.
+// Arquivo orquestrador — gerencia estado global, dados e renderiza as abas.
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -18,6 +18,7 @@ import { TabNotas }     from '../tabs/TabNotas';
 import { TabAvisos }    from '../tabs/TabAvisos';
 import { TabGraficos }  from '../tabs/TabGraficos';
 import { TabAjustes }   from '../tabs/TabAjustes';
+import { TabLogs }      from '../tabs/TabLogs'; // Importando a nova tab de logs
 
 import type { Expense } from '../types';
 
@@ -60,12 +61,13 @@ export default function Dashboard() {
   // ── Dados (Hook Customizado) ──────────────────────────────────────────────
   const {
     expenses, 
-    prevMonthExpenses, // Pegando os dados detalhados para os gráficos
+    prevMonthExpenses, 
     prevMonthTotal, 
     categories, 
     shoppingList,
     reminders, 
     notes, 
+    logs, // Pegando os logs do hook
     annualChartData, 
     userProfile, 
     isLoading,
@@ -91,7 +93,7 @@ export default function Dashboard() {
 
       {/* Header com Navegação e Refresh */}
       <div className="flex items-center justify-between mb-4 bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
-        <button onClick={prevMonth} className="p-2"><ChevronLeft className="text-slate-400" /></button>
+        <button onClick={prevMonth} className="p-2 active:scale-90 transition-transform"><ChevronLeft className="text-slate-400" /></button>
         <div className="flex flex-col items-center">
           <h2 className="font-black text-lg capitalize leading-none text-slate-800 dark:text-white">
             {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
@@ -103,7 +105,7 @@ export default function Dashboard() {
             <RefreshCcw size={10} /> ATUALIZAR APP
           </button>
         </div>
-        <button onClick={nextMonth} className="p-2"><ChevronRight className="text-slate-400" /></button>
+        <button onClick={nextMonth} className="p-2 active:scale-90 transition-transform"><ChevronRight className="text-slate-400" /></button>
       </div>
 
       {/* Orquestrador de Abas com Animação */}
@@ -121,7 +123,7 @@ export default function Dashboard() {
               categories={categories}
               prevMonthTotal={prevMonthTotal}
               isLoading={isLoading}
-              currentDate={currentDate} // <-- ESSENCIAL para a Galeria funcionar
+              currentDate={currentDate}
               fetchData={fetchData}
               showToast={showToast}
               onEdit={handleEditExpense}
@@ -166,7 +168,7 @@ export default function Dashboard() {
           {activeTab === 'stats' && (
             <TabGraficos
               expenses={expenses}
-              prevMonthExpenses={prevMonthExpenses} // <-- Para as setinhas de tendência
+              prevMonthExpenses={prevMonthExpenses}
               categories={categories}
               annualChartData={annualChartData}
               currentDate={currentDate}
@@ -181,12 +183,20 @@ export default function Dashboard() {
               setIsDarkMode={setIsDarkMode}
               fetchData={fetchData}
               showToast={showToast}
+              onOpenLogs={() => setActiveTab('logs')} // Passando a função para abrir logs
+            />
+          )}
+
+          {activeTab === 'logs' && (
+            <TabLogs 
+              logs={logs} 
+              onBack={() => setActiveTab('config')} 
             />
           )}
         </motion.div>
       </AnimatePresence>
 
-      {/* Modal Visualizador de Comprovante (Receipt) */}
+      {/* Modal Visualizador de Comprovante */}
       <AnimatePresence>
         {viewingReceipt && (
           <motion.div
@@ -216,4 +226,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

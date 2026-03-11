@@ -1,7 +1,7 @@
 // ─── ABA: CONFIGURAÇÕES ──────────────────────────────────────────────────────
 
 import { useState } from 'react';
-import { Moon, Sun, LogOut, Plus, Trash2 } from 'lucide-react';
+import { Moon, Sun, LogOut, Plus, Trash2, History } from 'lucide-react'; // Adicionado History
 import { supabase } from '../supabase';
 import { useAuth } from '../AuthContext';
 import { formatCurrency } from '../utils';
@@ -14,9 +14,18 @@ interface Props {
   setIsDarkMode: (v: boolean) => void;
   fetchData: () => void;
   showToast: (msg: string, type?: string) => void;
+  onOpenLogs: () => void; // Nova prop para abrir os logs
 }
 
-export function TabAjustes({ userProfile, categories, isDarkMode, setIsDarkMode, fetchData, showToast }: Props) {
+export function TabAjustes({ 
+  userProfile, 
+  categories, 
+  isDarkMode, 
+  setIsDarkMode, 
+  fetchData, 
+  showToast,
+  onOpenLogs 
+}: Props) {
   const { user } = useAuth();
 
   return (
@@ -55,6 +64,20 @@ export function TabAjustes({ userProfile, categories, isDarkMode, setIsDarkMode,
           <span className="text-[10px] font-black uppercase tracking-widest leading-none">SAIR</span>
         </button>
       </div>
+
+      {/* NOVO: Botão de Histórico de Logs */}
+      <button 
+        onClick={onOpenLogs}
+        className="w-full p-6 bg-white dark:bg-slate-800 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 flex items-center gap-4 shadow-sm active:scale-95 transition-all"
+      >
+        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl">
+          <History size={24} />
+        </div>
+        <div className="text-left">
+          <p className="font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tighter">Histórico de Atividade</p>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mt-1">Ver quem alterou o quê</p>
+        </div>
+      </button>
 
       {/* Categorias */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm transition-colors">
@@ -106,19 +129,19 @@ function CategoryManager({
     <div className="space-y-4">
       <div className="flex gap-2">
         <input
-          className="flex-1 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 text-sm outline-none font-bold text-slate-800 dark:text-white"
+          className="flex-1 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 text-sm outline-none font-bold text-slate-800 dark:text-white transition-all"
           placeholder="Nova categoria..."
           value={newCat}
           onChange={(e) => setNewCat(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addCategory()}
         />
-        <button onClick={addCategory} className="bg-blue-600 text-white p-4 rounded-2xl active:scale-90 transition-all">
+        <button onClick={addCategory} className="bg-blue-600 text-white p-4 rounded-2xl active:scale-90 transition-all shadow-md">
           <Plus size={20} />
         </button>
       </div>
       <div className="space-y-3 max-h-[25rem] overflow-y-auto pr-1 no-scrollbar pb-6">
         {categories.map((c) => (
-          <div key={c.id} className="p-4 bg-slate-50 dark:bg-slate-900 rounded-[2rem] space-y-3 border border-slate-100 dark:border-slate-700 transition-colors">
+          <div key={c.id} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] space-y-3 border border-slate-100 dark:border-slate-800 transition-colors shadow-sm">
             <div className="flex justify-between items-center">
               <input
                 type="text"
