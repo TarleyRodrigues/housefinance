@@ -89,13 +89,13 @@ export function TabAvisos({ reminders, fetchData, showToast }: Props) {
           value={remText}
           onChange={(e) => setRemText(e.target.value)}
         />
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="grid grid-cols-12 gap-2">
+          <div className="col-span-7 relative min-w-0">
+            <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               type="date"
               required
-              className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-sm text-slate-800 dark:text-white"
+              className="w-full p-3.5 pl-9 bg-slate-50 dark:bg-slate-900/50 rounded-2xl outline-none border border-slate-100 dark:border-slate-700 text-[13px] text-slate-800 dark:text-white appearance-none"
               value={remDate}
               onChange={(e) => setRemDate(e.target.value)}
             />
