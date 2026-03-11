@@ -16,12 +16,19 @@ const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 
 interface Props {
   expenses: Expense[];
+  prevMonthExpenses: Expense[]; // <-- ADICIONE ESTA LINHA
   categories: Category[];
   annualChartData: { name: string; total: number }[];
   currentDate: Date;
 }
 
-export function TabGraficos({ expenses, categories, annualChartData, currentDate }: Props) {
+export function TabGraficos({ 
+  expenses, 
+  prevMonthExpenses, // <-- ADICIONE ESTA LINHA
+  categories, 
+  annualChartData, 
+  currentDate 
+}: Props) {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
 
