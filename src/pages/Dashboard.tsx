@@ -1,6 +1,5 @@
 // ─── DASHBOARD.TSX ───────────────────────────────────────────────────────────
 // Arquivo orquestrador — apenas gerencia estado global e renderiza as abas.
-// Para editar uma tela específica, abra o arquivo correspondente em /tabs/.
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,7 +19,7 @@ import { TabAvisos }    from '../tabs/TabAvisos';
 import { TabGraficos }  from '../tabs/TabGraficos';
 import { TabAjustes }   from '../tabs/TabAjustes';
 
-import type { Expense, TabName, ToastState } from '../types';
+import type { Expense } from '../types';
 
 export default function Dashboard() {
   // ── Navegação ─────────────────────────────────────────────────────────────
@@ -29,20 +28,25 @@ export default function Dashboard() {
 
   // ── Tema ──────────────────────────────────────────────────────────────────
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+  
   useEffect(() => {
     const root = window.document.documentElement;
-    isDarkMode ? root.classList.add('dark') : root.classList.remove('dark');
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const [toast, setToast] = useState<{msg: string, type: string} | null>(null);
   const showToast = (msg: string, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // ── Edição de despesa (passada do Extrato → NovoGasto) ────────────────────
+  // ── Edição de despesa ────────────────────────────────────────────────────
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   const handleEditExpense = (exp: Expense) => {
@@ -53,10 +57,18 @@ export default function Dashboard() {
   // ── Comprovante fullscreen ─────────────────────────────────────────────────
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
-  // ── Dados ─────────────────────────────────────────────────────────────────
+  // ── Dados (Hook Customizado) ──────────────────────────────────────────────
   const {
-    expenses, prevMonthTotal, categories, shoppingList,
-    reminders, notes, annualChartData, userProfile, isLoading,
+    expenses, 
+    prevMonthExpenses, // Pegando os dados detalhados para os gráficos
+    prevMonthTotal, 
+    categories, 
+    shoppingList,
+    reminders, 
+    notes, 
+    annualChartData, 
+    userProfile, 
+    isLoading,
     fetchData,
   } = useDashboardData(currentDate, activeTab);
 
@@ -72,35 +84,36 @@ export default function Dashboard() {
   return (
     <div className={`pb-32 pt-4 px-4 max-w-md mx-auto min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
 
-      {/* Toast */}
+      {/* Notificações (Toasts) */}
       <AnimatePresence>
         {toast && <Toast message={toast.msg} type={toast.type} />}
       </AnimatePresence>
 
-      {/* Header */}
+      {/* Header com Navegação e Refresh */}
       <div className="flex items-center justify-between mb-4 bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
-        <button onClick={prevMonth}><ChevronLeft className="text-slate-400" /></button>
+        <button onClick={prevMonth} className="p-2"><ChevronLeft className="text-slate-400" /></button>
         <div className="flex flex-col items-center">
           <h2 className="font-black text-lg capitalize leading-none text-slate-800 dark:text-white">
             {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
           </h2>
           <button
             onClick={() => window.location.reload()}
-            className="flex items-center gap-1 mt-1 text-[9px] font-black text-blue-500 uppercase tracking-widest"
+            className="flex items-center gap-1 mt-1 text-[9px] font-black text-blue-500 uppercase tracking-widest active:scale-95 transition-transform"
           >
-            <RefreshCcw size={10} /> ATUALIZAR
+            <RefreshCcw size={10} /> ATUALIZAR APP
           </button>
         </div>
-        <button onClick={nextMonth}><ChevronRight className="text-slate-400" /></button>
+        <button onClick={nextMonth} className="p-2"><ChevronRight className="text-slate-400" /></button>
       </div>
 
-      {/* Conteúdo das abas */}
+      {/* Orquestrador de Abas com Animação */}
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab + currentDate.toISOString()}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ duration: 0.2 }}
         >
           {activeTab === 'list' && (
             <TabExtrato
@@ -108,6 +121,7 @@ export default function Dashboard() {
               categories={categories}
               prevMonthTotal={prevMonthTotal}
               isLoading={isLoading}
+              currentDate={currentDate} // <-- ESSENCIAL para a Galeria funcionar
               fetchData={fetchData}
               showToast={showToast}
               onEdit={handleEditExpense}
@@ -126,20 +140,33 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'shopping' && (
-            <TabCompras shoppingList={shoppingList} fetchData={fetchData} showToast={showToast} />
+            <TabCompras 
+              shoppingList={shoppingList} 
+              fetchData={fetchData} 
+              showToast={showToast} 
+            />
           )}
 
           {activeTab === 'notes' && (
-            <TabNotas notes={notes} fetchData={fetchData} showToast={showToast} />
+            <TabNotas 
+              notes={notes} 
+              fetchData={fetchData} 
+              showToast={showToast} 
+            />
           )}
 
           {activeTab === 'reminders' && (
-            <TabAvisos reminders={reminders} fetchData={fetchData} showToast={showToast} />
+            <TabAvisos 
+              reminders={reminders} 
+              fetchData={fetchData} 
+              showToast={showToast} 
+            />
           )}
 
           {activeTab === 'stats' && (
             <TabGraficos
               expenses={expenses}
+              prevMonthExpenses={prevMonthExpenses} // <-- Para as setinhas de tendência
               categories={categories}
               annualChartData={annualChartData}
               currentDate={currentDate}
@@ -159,7 +186,7 @@ export default function Dashboard() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Visualizador de comprovante */}
+      {/* Modal Visualizador de Comprovante (Receipt) */}
       <AnimatePresence>
         {viewingReceipt && (
           <motion.div
@@ -172,7 +199,11 @@ export default function Dashboard() {
               <X size={32} />
             </button>
             <div className="flex-1 flex items-center justify-center">
-              <img src={viewingReceipt} className="max-w-full max-h-[85vh] rounded-3xl object-contain border border-white/10 shadow-2xl" alt="Comprovante" />
+              <img 
+                src={viewingReceipt} 
+                className="max-w-full max-h-[85vh] rounded-3xl object-contain border border-white/10 shadow-2xl" 
+                alt="Comprovante" 
+              />
             </div>
             <p className="text-center text-white/50 text-[10px] font-black uppercase tracking-[0.4em] mt-6 leading-none">
               DOCUMENTO SALVO NO SUPABASE

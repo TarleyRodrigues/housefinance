@@ -47,6 +47,7 @@ export interface Note {
   id: string;
   title: string;
   content: string;
+  color: string; // <-- Garanta que esta linha existe
   user_id: string;
   created_at: string;
 }

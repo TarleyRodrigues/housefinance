@@ -11,6 +11,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const { user } = useAuth();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [prevMonthExpenses, setPrevMonthExpenses] = useState<Expense[]>([]); // NOVO: Para comparativo de categorias
   const [prevMonthTotal, setPrevMonthTotal] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
@@ -27,9 +28,11 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   async function fetchData() {
     setIsLoading(true);
     try {
+      // 1. Buscar Categorias
       const { data: cats } = await supabase.from('categories').select('*').order('name');
       if (cats) setCategories(cats);
 
+      // 2. Buscar Perfil do Usuário
       if (user) {
         const { data: p } = await supabase
           .from('profiles')
@@ -39,24 +42,31 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         if (p) setUserProfile(p);
       }
 
+      // Configuração de Datas (Mês Atual e Anterior)
       const startM = startOfMonth(currentDate).toISOString();
       const endM = endOfMonth(currentDate).toISOString();
       const startPrev = startOfMonth(subMonths(currentDate, 1)).toISOString();
       const endPrev = endOfMonth(subMonths(currentDate, 1)).toISOString();
 
-      const { data: prev } = await supabase
+      // 3. Buscar Dados do Mês ANTERIOR (Completo para o comparativo de categorias)
+      const { data: prevExps } = await supabase
         .from('expenses')
-        .select('amount')
+        .select('amount, category_name')
         .eq('is_deleted', false)
         .gte('created_at', startPrev)
         .lte('created_at', endPrev);
-      setPrevMonthTotal(prev?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0);
+      
+      const pExps = prevExps || [];
+      setPrevMonthExpenses(pExps as any);
+      setPrevMonthTotal(pExps.reduce((acc, curr) => acc + Number(curr.amount), 0));
 
+      // 4. Buscar Anotações (Se a aba estiver ativa)
       if (activeTab === 'notes') {
         const { data: n } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
         setNotes(n || []);
       }
 
+      // 5. Buscar Lembretes (Se a aba estiver ativa)
       if (activeTab === 'reminders') {
         const { data: r } = await supabase
           .from('reminders')
@@ -67,6 +77,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setReminders(r || []);
       }
 
+      // 6. Buscar Lista de Compras (Se a aba estiver ativa)
       if (activeTab === 'shopping') {
         const { data: s } = await supabase
           .from('shopping_list')
@@ -76,6 +87,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setShoppingList(s || []);
       }
 
+      // 7. Buscar Gastos do Mês Atual
       const { data: exps } = await supabase
         .from('expenses')
         .select('*, profiles(full_name, avatar_url)')
@@ -85,7 +97,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         .order('created_at', { ascending: false });
       setExpenses(exps || []);
 
-      // Gráfico anual
+      // 8. Gráfico anual (Busca otimizada do ano inteiro)
       const startY = new Date(currentDate.getFullYear(), 0, 1).toISOString();
       const endY = new Date(currentDate.getFullYear(), 11, 31).toISOString();
       const { data: ann } = await supabase
@@ -105,15 +117,23 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         }))
       );
     } catch (e) {
-      console.error(e);
+      console.error("Erro no hook useDashboardData:", e);
     } finally {
       setIsLoading(false);
     }
   }
 
   return {
-    expenses, prevMonthTotal, categories, shoppingList,
-    reminders, notes, annualChartData, userProfile, isLoading,
+    expenses, 
+    prevMonthExpenses, // Agora retornado para uso na TabGraficos
+    prevMonthTotal, 
+    categories, 
+    shoppingList,
+    reminders, 
+    notes, 
+    annualChartData, 
+    userProfile, 
+    isLoading,
     fetchData,
   };
 }
