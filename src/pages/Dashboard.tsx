@@ -6,6 +6,7 @@ import { ptBR } from 'date-fns/locale';
 import BottomNav from '../components/BottomNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import ReactMarkdown from 'react-markdown';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis } from 'recharts';
 import {
   Trash2, Edit2, ChevronLeft, ChevronRight, Plus, X, LogOut,
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 
 // ─── CHAVE GEMINI ────────────────────────────────────────────────────────────
-const GEMINI_KEY = "AIzaSyA3sCpJ3KdfLYS2Ep0kY8lJF8AdCY_CaIE"; // substitua pela sua chave real
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 const Toast = ({ message, type }: { message: string; type: string }) => (
@@ -146,22 +147,28 @@ export default function Dashboard() {
 
   // ── IA GEMINI ─────────────────────────────────────────────────────────────
   const generateAIAnalysis = async () => {
-    if (expenses.length === 0) return alert('Lance alguns gastos primeiro!');
-    setLoadingAI(true);
-    try {
-      const genAI = new GoogleGenerativeAI(GEMINI_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-      const gastosTxt = expenses
-        .map((e) => `${e.category_name}: ${formatCurrency(e.amount)}`)
-        .join(', ');
-      const prompt = `Analise os gastos de ${format(currentDate, 'MMMM yyyy', { locale: ptBR })}. Gastos: ${gastosTxt}. Dê uma dica curta e motivadora de economia em até 3 linhas.`;
-      const result = await model.generateContent(prompt);
-      setAiAnalysis(result.response.text());
-    } catch {
-      setAiAnalysis('Não foi possível conectar ao Gemini. Verifique sua chave de API.');
+  if (expenses.length === 0) return alert('Lance alguns gastos primeiro!');
+  setLoadingAI(true);
+  try {
+    const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); // ✅ disponível na sua chave
+    const gastosTxt = expenses
+      .map((e) => `${e.category_name}: ${formatCurrency(e.amount)}`)
+      .join(', ');
+    const prompt = `Analise os gastos de ${format(currentDate, 'MMMM yyyy', { locale: ptBR })}. Gastos: ${gastosTxt}. Dê uma dica curta e motivadora de economia em até 3 linhas.`;
+    const result = await model.generateContent(prompt);
+    setAiAnalysis(result.response.text());
+  } catch (err: any) {
+    if (err?.message?.includes('429')) {
+      setAiAnalysis('⏳ Limite atingido. Aguarde alguns minutos.');
+    } else if (err?.message?.includes('503')) {
+      setAiAnalysis('🔄 Servidores sobrecarregados. Tente novamente.');
+    } else {
+      setAiAnalysis('Erro: ' + err.message);
     }
-    setLoadingAI(false);
-  };
+  }
+  setLoadingAI(false);
+};
 
   // ── FETCH DATA ────────────────────────────────────────────────────────────
   async function fetchData() {
@@ -993,20 +1000,27 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <AnimatePresence mode="wait">
-                  {aiAnalysis ? (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-sm text-slate-600 dark:text-slate-300 italic leading-relaxed"
-                    >
-                      "{aiAnalysis}"
-                    </motion.p>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">
-                      Clique para a IA analisar seus gastos!
-                    </p>
-                  )}
-                </AnimatePresence>
+  {aiAnalysis ? (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed prose prose-slate dark:prose-invert max-w-none pt-2"
+    >
+      <ReactMarkdown
+        components={{
+          strong: ({node, ...props}) => <span className="font-black text-blue-600 dark:text-blue-400" {...props} />,
+          p: ({node, ...props}) => <p className="mb-2" {...props} />,
+          h2: ({node, ...props}) => <h2 className="text-base font-black text-slate-800 dark:text-white mt-4 mb-2 uppercase tracking-tighter" {...props} />,
+          li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+        }}
+      >
+        {aiAnalysis}
+      </ReactMarkdown>
+    </motion.div>
+  ) : (
+    <p className="text-xs text-slate-400 italic font-medium">IA pronta para analisar seus gastos!</p>
+  )}
+</AnimatePresence>
                 <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
               </div>
 
