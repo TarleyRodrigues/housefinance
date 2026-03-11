@@ -4,7 +4,7 @@
 
 | Antes | Depois |
 |-------|--------|
-| 1 arquivo `Dashboard.tsx` com ~500 linhas | 10 arquivos pequenos e focados |
+| 1 arquivo `Dashboard.tsx` com ~1000 linhas | 10 arquivos pequenos e focados |
 | Difícil de manter | Cada tela tem seu próprio arquivo |
 | Alterar uma tela pode quebrar outra | Mudanças isoladas por arquivo |
 
@@ -74,7 +74,12 @@ em vez do arquivo inteiro de 500 linhas. Exemplo:
 
 ## ⚠️ Lembrete importante
 
-A chave do Gemini está exposta no `TabGraficos.tsx`.
+A chave do Gemini está no arquivo .env.
+Para funcionar em produção, foi inserido a chave em em actions secrets do github em: https://github.com/TarleyRodrigues/housefinance/settings/secrets/actions/VITE_GEMINI_KEY
+
+A chave API foi criada no aistudio em:
+https://aistudio.google.com/api-keys
+
 Para produção, mova para `.env`:
 
 ```env
@@ -85,3 +90,9 @@ VITE_GEMINI_KEY=sua_chave_aqui
 // TabGraficos.tsx
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 ```
+
+Rodar no terminal do vs code:
+npm run dev
+
+Deploy no terminal do vs code:
+npm run deploy
