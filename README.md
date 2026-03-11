@@ -1,23 +1,87 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 📁 Estrutura do Dashboard Refatorado
 
-# Run and deploy your AI Studio app
+## Antes vs Depois
 
-This contains everything you need to run your app locally.
+| Antes | Depois |
+|-------|--------|
+| 1 arquivo `Dashboard.tsx` com ~500 linhas | 10 arquivos pequenos e focados |
+| Difícil de manter | Cada tela tem seu próprio arquivo |
+| Alterar uma tela pode quebrar outra | Mudanças isoladas por arquivo |
 
-View your app in AI Studio: https://ai.studio/apps/5686db26-9eb3-41ee-85c1-1789cc0db240
+---
 
-## Run Locally
+## 📂 Estrutura de pastas
 
-**Prerequisites:**  Node.js
+```
+src/
+├── pages/
+│   └── Dashboard.tsx          ← Orquestrador (navegação + estado global)
+│
+├── tabs/                       ← Uma tela = um arquivo
+│   ├── TabExtrato.tsx          ← Aba "Extrato" com filtros e lista
+│   ├── TabNovoGasto.tsx        ← Aba "Novo Gasto" / editar despesa
+│   ├── TabCompras.tsx          ← Aba "Lista de Compras"
+│   ├── TabNotas.tsx            ← Aba "Notas" + editor fullscreen
+│   ├── TabAvisos.tsx           ← Aba "Lembretes / Avisos"
+│   ├── TabGraficos.tsx         ← Aba "Gráficos" + IA Gemini
+│   └── TabAjustes.tsx          ← Aba "Configurações" + CategoryManager
+│
+├── hooks/
+│   └── useDashboardData.ts     ← Todas as queries do Supabase
+│
+├── components/
+│   └── ui/
+│       └── index.tsx           ← Toast, SkeletonCard
+│
+├── types/
+│   └── index.ts                ← Interfaces TypeScript (Expense, Category...)
+│
+└── utils/
+    └── index.ts                ← formatCurrency, CHART_COLORS, etc.
+```
 
+---
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🛠️ Como usar na prática
 
-4. Run and deploy:
-   'npm run deploy'
+### "Quero mudar o visual do Extrato"
+→ Abra **`src/tabs/TabExtrato.tsx`** — não toca em mais nada.
+
+### "Quero mudar a lógica do Gemini"
+→ Abra **`src/tabs/TabGraficos.tsx`** — está tudo no começo do arquivo.
+
+### "Preciso adicionar um campo no formulário de despesa"
+→ Abra **`src/tabs/TabNovoGasto.tsx`** — formulário isolado.
+
+### "A busca de dados do Supabase está errada"
+→ Abra **`src/hooks/useDashboardData.ts`** — todas as queries em um lugar.
+
+### "Preciso adicionar um novo tipo TypeScript"
+→ Abra **`src/types/index.ts`**.
+
+---
+
+## 📤 Enviando para uma IA corrigir
+
+Agora você pode mandar **apenas o arquivo relevante** para o Claude/ChatGPT/Gemini,
+em vez do arquivo inteiro de 500 linhas. Exemplo:
+
+- Bug no formulário? → manda só `TabNovoGasto.tsx` (80 linhas)
+- Bug nos gráficos? → manda só `TabGraficos.tsx` (120 linhas)
+- Bug no banco? → manda só `useDashboardData.ts` (90 linhas)
+
+---
+
+## ⚠️ Lembrete importante
+
+A chave do Gemini está exposta no `TabGraficos.tsx`.
+Para produção, mova para `.env`:
+
+```env
+VITE_GEMINI_KEY=sua_chave_aqui
+```
+
+```tsx
+// TabGraficos.tsx
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+```

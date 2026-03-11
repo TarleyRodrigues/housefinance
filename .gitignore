@@ -1,8 +1,29 @@
+# Dependências
 node_modules/
-build/
+
+# Produção / Build
 dist/
+build/
 coverage/
-.DS_Store
-*.log
+
+# Variáveis de Ambiente (Segurança!)
 .env*
 !.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Sistema (macOS e Windows)
+.DS_Store
+Thumbs.db
+
+# Editor (VS Code)
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# TypeScript
+*.tsbuildinfo
