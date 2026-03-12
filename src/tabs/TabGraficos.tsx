@@ -16,7 +16,7 @@ const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
 
 interface Props {
   expenses: Expense[];
-  prevMonthExpenses: Expense[]; // <-- ADICIONE ESTA LINHA
+  prevMonthExpenses: Expense[]; 
   categories: Category[];
   annualChartData: { name: string; total: number }[];
   currentDate: Date;

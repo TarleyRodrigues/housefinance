@@ -7,7 +7,7 @@ build/
 coverage/
 
 # Variáveis de Ambiente (Segurança!)
-.env
+.env*
 !.env.example
 
 # Logs
