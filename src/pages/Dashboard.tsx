@@ -1,5 +1,11 @@
 // ─── DASHBOARD.TSX ───────────────────────────────────────────────────────────
 // Arquivo orquestrador — gerencia estado global, dados e renderiza as abas.
+// Melhorias desta versão:
+// ✅ addShoppingItem — insere item com quantidade e preço estimado
+// ✅ toggleShoppingItem — marca/desmarca item como comprado
+// ✅ deleteShoppingItem — remove item individual
+// ✅ clearDoneItems — limpa todos os itens já comprados
+// ✅ Todos os callbacks de TabCompras centralizados aqui
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -10,7 +16,8 @@ import { ptBR } from 'date-fns/locale';
 import BottomNav from '../components/BottomNav';
 import { Toast } from '../components/ui';
 import { useDashboardData } from '../hooks/useDashboardData';
-import { supabase } from '../supabase'; // ✅ NOVO: necessário para deleteExpense
+import { useAuth } from '../AuthContext';
+import { supabase } from '../supabase';
 
 import { TabExtrato }   from '../tabs/TabExtrato';
 import { TabNovoGasto } from '../tabs/TabNovoGasto';
@@ -24,6 +31,8 @@ import { TabLogs }      from '../tabs/TabLogs';
 import type { Expense } from '../types';
 
 export default function Dashboard() {
+  const { user } = useAuth();
+
   // ── Navegação ─────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<string>('list');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -57,7 +66,6 @@ export default function Dashboard() {
     setActiveTab('add');
   }, []);
 
-  // Limpa edição ao sair da aba 'add'
   useEffect(() => {
     if (activeTab !== 'add') setEditingExpense(null);
   }, [activeTab]);
@@ -85,16 +93,95 @@ export default function Dashboard() {
   const prevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
-  // ── ✅ NOVO: deleteExpense — lógica de banco saiu do TabExtrato ────────────
-  // Usa soft-delete (is_deleted = true) para preservar histórico
+  // ── Despesas ──────────────────────────────────────────────────────────────
   const deleteExpense = useCallback(async (id: string): Promise<void> => {
     const { error } = await supabase
       .from('expenses')
       .update({ is_deleted: true })
       .eq('id', id);
-
     if (error) throw error;
   }, []);
+
+  // ── Lembretes ─────────────────────────────────────────────────────────────
+  const saveReminder = useCallback(async ({
+    text, date, time, editId,
+  }: {
+    text: string;
+    date: string;
+    time: string;
+    editId: string | null;
+  }): Promise<void> => {
+    if (!user) throw new Error('Usuário não autenticado');
+    const payload = {
+      text,
+      reminder_date: date,
+      reminder_time: time || null,
+      user_id: user.id,
+    };
+    if (editId) {
+      const { error } = await supabase.from('reminders').update(payload).eq('id', editId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('reminders').insert(payload);
+      if (error) throw error;
+    }
+  }, [user]);
+
+  const deleteReminder = useCallback(async (id: string): Promise<void> => {
+    const { error } = await supabase.from('reminders').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
+
+  // ── Lista de compras ──────────────────────────────────────────────────────
+
+  // Adiciona item com quantidade e preço estimado opcionais
+  const addShoppingItem = useCallback(async ({
+    name,
+    qty,
+    price,
+  }: {
+    name: string;
+    qty: number;
+    price: number | null;
+  }): Promise<void> => {
+    if (!user) throw new Error('Usuário não autenticado');
+    const { error } = await supabase.from('shopping_list').insert({
+      item_name: name,
+      quantity: qty,
+      estimated_price: price,
+      user_id: user.id,
+    });
+    if (error) throw error;
+  }, [user]);
+
+  // Alterna entre pendente e comprado
+  const toggleShoppingItem = useCallback(async (id: string, current: boolean): Promise<void> => {
+    const { error } = await supabase
+      .from('shopping_list')
+      .update({ is_pending: !current })
+      .eq('id', id);
+    if (error) throw error;
+  }, []);
+
+  // Remove item individual
+  const deleteShoppingItem = useCallback(async (id: string): Promise<void> => {
+    const { error } = await supabase
+      .from('shopping_list')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }, []);
+
+  // Remove todos os itens já comprados (is_pending = false)
+  const clearDoneItems = useCallback(async (): Promise<void> => {
+    const ids = shoppingList.filter((i) => !i.is_pending).map((i) => i.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase
+      .from('shopping_list')
+      .delete()
+      .in('id', ids);
+    if (error) throw error;
+  }, [shoppingList]);
 
   return (
     <div
@@ -159,7 +246,7 @@ export default function Dashboard() {
               showToast={showToast}
               onEdit={handleEditExpense}
               onViewReceipt={setViewingReceipt}
-              onDelete={deleteExpense} // ✅ NOVO: prop adicionada
+              onDelete={deleteExpense}
             />
           )}
 
@@ -178,6 +265,10 @@ export default function Dashboard() {
               shoppingList={shoppingList}
               fetchData={fetchData}
               showToast={showToast}
+              onAdd={addShoppingItem}       // ✅ NOVO
+              onToggle={toggleShoppingItem} // ✅ NOVO
+              onDelete={deleteShoppingItem} // ✅ NOVO
+              onClearDone={clearDoneItems}  // ✅ NOVO
             />
           )}
 
@@ -194,6 +285,8 @@ export default function Dashboard() {
               reminders={reminders}
               fetchData={fetchData}
               showToast={showToast}
+              onSave={saveReminder}
+              onDelete={deleteReminder}
             />
           )}
 
@@ -204,6 +297,7 @@ export default function Dashboard() {
               categories={categories}
               annualChartData={annualChartData}
               currentDate={currentDate}
+              showToast={showToast}
             />
           )}
 
