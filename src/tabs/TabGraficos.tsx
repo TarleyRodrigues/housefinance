@@ -25,7 +25,7 @@ import {
   BarChart, Bar, XAxis, ReferenceLine,
 } from 'recharts';
 import { formatCurrency, CHART_COLORS, USER_COLORS } from '../utils';
-import { useGeminiAnalysis } from '/hooks/useGeminiAnalysis';
+import { useGeminiAnalysis } from '../hooks/useGeminiAnalysis'
 import type { Expense, Category } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
