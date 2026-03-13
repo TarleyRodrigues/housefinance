@@ -1,11 +1,10 @@
 // ─── DASHBOARD.TSX ───────────────────────────────────────────────────────────
 // Arquivo orquestrador — gerencia estado global, dados e renderiza as abas.
 // Melhorias desta versão:
-// ✅ addShoppingItem — insere item com quantidade e preço estimado
-// ✅ toggleShoppingItem — marca/desmarca item como comprado
-// ✅ deleteShoppingItem — remove item individual
-// ✅ clearDoneItems — limpa todos os itens já comprados
-// ✅ Todos os callbacks de TabCompras centralizados aqui
+// ✅ signOut centralizado aqui
+// ✅ addCategory, updateCategory, deleteCategory centralizados aqui
+// ✅ expenses e currentDate passados para TabAjustes (estatísticas + CSV)
+// ✅ Padrão arquitetural 100% consistente — zero supabase nos componentes filhos
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -93,6 +92,12 @@ export default function Dashboard() {
   const prevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
+  // ── Autenticação ──────────────────────────────────────────────────────────
+  const signOut = useCallback(async (): Promise<void> => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  }, []);
+
   // ── Despesas ──────────────────────────────────────────────────────────────
   const deleteExpense = useCallback(async (id: string): Promise<void> => {
     const { error } = await supabase
@@ -133,12 +138,8 @@ export default function Dashboard() {
   }, []);
 
   // ── Lista de compras ──────────────────────────────────────────────────────
-
-  // Adiciona item com quantidade e preço estimado opcionais
   const addShoppingItem = useCallback(async ({
-    name,
-    qty,
-    price,
+    name, qty, price,
   }: {
     name: string;
     qty: number;
@@ -154,7 +155,6 @@ export default function Dashboard() {
     if (error) throw error;
   }, [user]);
 
-  // Alterna entre pendente e comprado
   const toggleShoppingItem = useCallback(async (id: string, current: boolean): Promise<void> => {
     const { error } = await supabase
       .from('shopping_list')
@@ -163,25 +163,58 @@ export default function Dashboard() {
     if (error) throw error;
   }, []);
 
-  // Remove item individual
   const deleteShoppingItem = useCallback(async (id: string): Promise<void> => {
-    const { error } = await supabase
-      .from('shopping_list')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('shopping_list').delete().eq('id', id);
     if (error) throw error;
   }, []);
 
-  // Remove todos os itens já comprados (is_pending = false)
   const clearDoneItems = useCallback(async (): Promise<void> => {
     const ids = shoppingList.filter((i) => !i.is_pending).map((i) => i.id);
     if (ids.length === 0) return;
-    const { error } = await supabase
-      .from('shopping_list')
-      .delete()
-      .in('id', ids);
+    const { error } = await supabase.from('shopping_list').delete().in('id', ids);
     if (error) throw error;
   }, [shoppingList]);
+
+  // ── Categorias ────────────────────────────────────────────────────────────
+
+  // Adiciona nova categoria
+  const addCategory = useCallback(async (name: string): Promise<void> => {
+    const { error } = await supabase.from('categories').insert({ name });
+    if (error) throw error;
+  }, []);
+
+  // Atualiza nome, meta ou cor de uma categoria
+  const updateCategory = useCallback(async ({
+    id, name, oldName, monthly_goal, color,
+  }: {
+    id: string;
+    name?: string;
+    oldName?: string;
+    monthly_goal?: number;
+    color?: string;
+  }): Promise<void> => {
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined)         updates.name = name;
+    if (monthly_goal !== undefined) updates.monthly_goal = monthly_goal;
+    if (color !== undefined)        updates.color = color;
+
+    const { error } = await supabase.from('categories').update(updates).eq('id', id);
+    if (error) throw error;
+
+    // Se o nome mudou, atualiza despesas vinculadas para manter consistência
+    if (name && oldName && name !== oldName) {
+      await supabase
+        .from('expenses')
+        .update({ category_name: name })
+        .eq('category_name', oldName);
+    }
+  }, []);
+
+  // Remove categoria (despesas ficam sem categoria — não são apagadas)
+  const deleteCategory = useCallback(async (id: string): Promise<void> => {
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
 
   return (
     <div
@@ -265,10 +298,10 @@ export default function Dashboard() {
               shoppingList={shoppingList}
               fetchData={fetchData}
               showToast={showToast}
-              onAdd={addShoppingItem}       // ✅ NOVO
-              onToggle={toggleShoppingItem} // ✅ NOVO
-              onDelete={deleteShoppingItem} // ✅ NOVO
-              onClearDone={clearDoneItems}  // ✅ NOVO
+              onAdd={addShoppingItem}
+              onToggle={toggleShoppingItem}
+              onDelete={deleteShoppingItem}
+              onClearDone={clearDoneItems}
             />
           )}
 
@@ -305,11 +338,17 @@ export default function Dashboard() {
             <TabAjustes
               userProfile={userProfile}
               categories={categories}
+              expenses={expenses}           // ✅ NOVO — para estatísticas e CSV
+              currentDate={currentDate}     // ✅ NOVO — para nome do arquivo CSV
               isDarkMode={isDarkMode}
               setIsDarkMode={setIsDarkMode}
               fetchData={fetchData}
               showToast={showToast}
               onOpenLogs={() => setActiveTab('logs')}
+              onSignOut={signOut}           // ✅ NOVO
+              onAddCategory={addCategory}   // ✅ NOVO
+              onUpdateCategory={updateCategory} // ✅ NOVO
+              onDeleteCategory={deleteCategory} // ✅ NOVO
             />
           )}
 
