@@ -132,7 +132,7 @@ export interface Dream {
   title: string;
   target_value: number;
   image_url: string | null;
-  category_id: string;
+  category_id: string;    // FK para categories — criada junto com o sonho
   is_completed: boolean;
   created_at: string;
 }
