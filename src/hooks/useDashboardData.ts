@@ -1,18 +1,19 @@
 // ─── HOOK PRINCIPAL DE DADOS ─────────────────────────────────────────────────
-// Melhorias aplicadas:
-// ✅ fetchData estabilizado com useCallback (performance — sem re-renders desnecessários)
-// ✅ categories busca color — select explícito com todos os campos necessários
-// ✅ prevMonthExpenses tipado corretamente — sem `as any`
-// ✅ logs tipado com interface Log — zero `any`
-// ✅ logs buscados apenas na aba 'logs' (lazy, como shopping/notes/reminders)
-// ✅ Tratamento de erro com estado exposto — componentes podem reagir a falhas
-// ✅ Datas de mês encapsuladas em useMemo — recalcular só quando currentDate muda
+// ✅ fetchData estabilizado com useCallback
+// ✅ categories busca color — select explícito
+// ✅ normalizeProfiles — Supabase retorna profiles como array, normalizamos para objeto
+// ✅ logs lazy — só na aba 'logs'
+// ✅ watchlist lazy — só na aba 'movies'
+// ✅ Tratamento de erro exposto
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from '../AuthContext';
-import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
-import type { Expense, Category, ShoppingItem, Reminder, Note, Profile } from '../types';
+import { startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import type {
+  Expense, Category, ShoppingItem, Reminder, Note, Profile,
+  WatchlistCategory, WatchlistItem,
+} from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos locais
@@ -30,8 +31,7 @@ export interface Log {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: normaliza o campo `profiles` que o Supabase retorna como array
-// quando se usa `.select('*, profiles(...)')` com foreign key
+// Helper: Supabase retorna `profiles` como array em joins — normaliza para objeto
 // ─────────────────────────────────────────────────────────────────────────────
 function normalizeProfiles<T extends { profiles?: unknown }>(rows: T[]): T[] {
   return rows.map((row) => ({
@@ -46,20 +46,22 @@ function normalizeProfiles<T extends { profiles?: unknown }>(rows: T[]): T[] {
 export function useDashboardData(currentDate: Date, activeTab: string) {
   const { user } = useAuth();
 
-  const [expenses, setExpenses]                   = useState<Expense[]>([]);
-  const [prevMonthExpenses, setPrevMonthExpenses]  = useState<Expense[]>([]);
-  const [prevMonthTotal, setPrevMonthTotal]        = useState(0);
-  const [categories, setCategories]               = useState<Category[]>([]);
-  const [shoppingList, setShoppingList]           = useState<ShoppingItem[]>([]);
-  const [reminders, setReminders]                 = useState<Reminder[]>([]);
-  const [notes, setNotes]                         = useState<Note[]>([]);
-  const [logs, setLogs]                           = useState<Log[]>([]);
-  const [annualChartData, setAnnualChartData]     = useState<{ name: string; total: number }[]>([]);
-  const [userProfile, setUserProfile]             = useState<Profile | null>(null);
-  const [isLoading, setIsLoading]                 = useState(true);
-  const [error, setError]                         = useState<string | null>(null);
+  const [expenses, setExpenses]                     = useState<Expense[]>([]);
+  const [prevMonthExpenses, setPrevMonthExpenses]    = useState<Expense[]>([]);
+  const [prevMonthTotal, setPrevMonthTotal]          = useState(0);
+  const [categories, setCategories]                 = useState<Category[]>([]);
+  const [shoppingList, setShoppingList]             = useState<ShoppingItem[]>([]);
+  const [reminders, setReminders]                   = useState<Reminder[]>([]);
+  const [notes, setNotes]                           = useState<Note[]>([]);
+  const [logs, setLogs]                             = useState<Log[]>([]);
+  const [annualChartData, setAnnualChartData]       = useState<{ name: string; total: number }[]>([]);
+  const [userProfile, setUserProfile]               = useState<Profile | null>(null);
+  const [watchlistCategories, setWatchlistCategories] = useState<WatchlistCategory[]>([]);
+  const [watchlistItems, setWatchlistItems]         = useState<WatchlistItem[]>([]);
+  const [isLoading, setIsLoading]                   = useState(true);
+  const [error, setError]                           = useState<string | null>(null);
 
-  // ── Datas pré-calculadas — recalcula só quando currentDate muda ────────────
+  // ── Datas pré-calculadas ───────────────────────────────────────────────────
   const dates = useMemo(() => {
     const startM    = startOfMonth(currentDate).toISOString();
     const endM      = endOfMonth(currentDate).toISOString();
@@ -70,15 +72,13 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     return { startM, endM, startPrev, endPrev, startY, endY };
   }, [currentDate]);
 
-  // ── fetchData estabilizado com useCallback ─────────────────────────────────
-  // Dependências explícitas: dates (encapsula currentDate) + activeTab + user
+  // ── fetchData ──────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // ── 1. Categorias — select explícito com color ───────────────────────
-      // ⚠️  Requer: alter table categories add column if not exists color text;
+      // 1. Categorias de gastos
       const { data: cats, error: catsErr } = await supabase
         .from('categories')
         .select('id, name, monthly_goal, color')
@@ -86,7 +86,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       if (catsErr) throw catsErr;
       if (cats) setCategories(cats as Category[]);
 
-      // ── 2. Perfil do usuário ─────────────────────────────────────────────
+      // 2. Perfil do usuário
       if (user) {
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
@@ -97,7 +97,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         if (profile) setUserProfile(profile as Profile);
       }
 
-      // ── 3. Gastos do mês anterior ────────────────────────────────────────
+      // 3. Gastos do mês anterior
       const { data: prevExps, error: prevErr } = await supabase
         .from('expenses')
         .select('id, amount, category_name, user_id, created_at, is_deleted, profiles(full_name, avatar_url)')
@@ -109,7 +109,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       setPrevMonthExpenses(pExps);
       setPrevMonthTotal(pExps.reduce((acc, e) => acc + Number(e.amount), 0));
 
-      // ── 4. Gastos do mês atual ───────────────────────────────────────────
+      // 4. Gastos do mês atual
       const { data: exps, error: expsErr } = await supabase
         .from('expenses')
         .select('*, profiles(full_name, avatar_url)')
@@ -120,7 +120,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       if (expsErr) throw expsErr;
       setExpenses(normalizeProfiles((exps ?? []) as unknown as Expense[]));
 
-      // ── 5. Gráfico anual ─────────────────────────────────────────────────
+      // 5. Gráfico anual
       const { data: ann, error: annErr } = await supabase
         .from('expenses')
         .select('amount, created_at')
@@ -139,7 +139,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         }))
       );
 
-      // ── 6. Queries lazy — só na aba correspondente ───────────────────────
+      // 6. Queries lazy por aba ──────────────────────────────────────────────
 
       if (activeTab === 'notes') {
         const { data: n, error: notesErr } = await supabase
@@ -171,7 +171,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setShoppingList(normalizeProfiles((s ?? []) as unknown as ShoppingItem[]));
       }
 
-      // ✅ Logs lazy — só na aba 'logs' (era sempre, agora economiza 1 query)
       if (activeTab === 'logs') {
         const { data: logData, error: logsErr } = await supabase
           .from('logs')
@@ -180,6 +179,23 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
           .limit(100);
         if (logsErr) throw logsErr;
         setLogs(normalizeProfiles((logData ?? []) as unknown as Log[]));
+      }
+
+      // ✅ NOVO — Watchlist lazy: só busca na aba 'movies'
+      if (activeTab === 'movies') {
+        const { data: wCats, error: wCatsErr } = await supabase
+          .from('watchlist_categories')
+          .select('*')
+          .order('created_at', { ascending: true });
+        if (wCatsErr) throw wCatsErr;
+        setWatchlistCategories((wCats ?? []) as WatchlistCategory[]);
+
+        const { data: wItems, error: wItemsErr } = await supabase
+          .from('watchlist_items')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (wItemsErr) throw wItemsErr;
+        setWatchlistItems((wItems ?? []) as WatchlistItem[]);
       }
 
     } catch (e) {
@@ -191,7 +207,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     }
   }, [dates, activeTab, user]);
 
-  // ── Dispara fetchData quando dependências mudam ────────────────────────────
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -207,8 +222,10 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     logs,
     annualChartData,
     userProfile,
+    watchlistCategories,
+    watchlistItems,
     isLoading,
-    error,      // ✅ NOVO — exposto para componentes exibirem erros se necessário
+    error,
     fetchData,
   };
 }

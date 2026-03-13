@@ -94,3 +94,29 @@ export type TabName =
   | 'stats'
   | 'config'
   | 'logs';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Watchlist (Filmes & Séries)
+// ─────────────────────────────────────────────────────────────────────────────
+export type WatchStatus = 'want' | 'watching' | 'watched';
+
+export interface WatchlistCategory {
+  id: string;
+  name: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface WatchlistItem {
+  id: string;
+  category_id: string;
+  user_id: string;
+  tmdb_id: number;
+  title: string;
+  poster_url: string | null;
+  synopsis: string | null;
+  year: string | null;
+  media_type: 'movie' | 'tv';
+  status: WatchStatus;
+  created_at: string;
+}
