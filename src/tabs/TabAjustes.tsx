@@ -272,8 +272,8 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
                       className="w-6 h-6 rounded-full border-2 transition-all active:scale-90"
                       style={{
                         backgroundColor: color,
-                        borderColor: (c as any).color === color ? 'white' : 'transparent',
-                        boxShadow: (c as any).color === color ? `0 0 0 2px ${color}` : 'none',
+                        borderColor: c.color === color ? 'white' : 'transparent',
+                        boxShadow: c.color === color ? `0 0 0 2px ${color}` : 'none',
                       }}
                     />
                   ))}
@@ -455,7 +455,7 @@ export function TabAjustes({
                 {userProfile?.full_name || 'Meu Perfil'}
               </p>
               <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-0.5 truncate">
-                {userProfile?.email ?? ''}
+                {userProfile?.full_name ? `@${userProfile.full_name.split(' ')[0].toLowerCase()}` : ''}
               </p>
               <button
                 onClick={() => (window.location.hash = '/profile')}

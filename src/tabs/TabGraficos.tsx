@@ -10,6 +10,11 @@
 // ✅ Lógica Gemini extraída para useGeminiAnalysis (arquitetura)
 // ✅ aria-label em gráficos e imagens (acessibilidade)
 // ✅ showToast adicionado às props (consistência)
+// ✅ Cores das categorias definidas em TabAjustes usadas nos gráficos (consistência 🔥)
+// ✅ Gráfico de pizza por categoria com cores personalizadas
+// ✅ Legenda com cor real da categoria
+// ✅ Metas com barra colorida por categoria
+// ✅ CHART_COLORS usado apenas como fallback quando categoria não tem cor
 
 import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -25,7 +30,7 @@ import {
   BarChart, Bar, XAxis, ReferenceLine,
 } from 'recharts';
 import { formatCurrency, CHART_COLORS, USER_COLORS } from '../utils';
-import { useGeminiAnalysis } from '../hooks/Usegeminianalysis'
+import { useGeminiAnalysis } from '../hooks/useGeminiAnalysis';
 import type { Expense, Category } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,13 +42,20 @@ interface UserTotal {
   value: number;
 }
 
+// chartData estende Category com a cor resolvida (própria ou fallback)
+interface CategoryChartEntry {
+  name: string;
+  value: number;
+  color: string; // cor real da categoria ou CHART_COLORS[i] como fallback
+}
+
 interface Props {
   expenses: Expense[];
   prevMonthExpenses: Expense[];
   categories: Category[];
   annualChartData: { name: string; total: number }[];
   currentDate: Date;
-  showToast: (msg: string, type?: string) => void; // ✅ adicionado para consistência
+  showToast: (msg: string, type?: string) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,15 +79,17 @@ export function TabGraficos({
 
   // ── Dados memoizados ──────────────────────────────────────────────────────
 
-  // Gráfico de pizza por categoria
-  const chartData = useMemo(
+  // ✅ Gráfico de pizza por categoria — cor real da categoria ou CHART_COLORS como fallback
+  const chartData = useMemo<CategoryChartEntry[]>(
     () =>
       categories
-        .map((cat) => ({
+        .map((cat, i) => ({
           name: cat.name,
           value: expenses
             .filter((e) => e.category_name === cat.name)
             .reduce((acc, curr) => acc + Number(curr.amount), 0),
+          // usa cor definida em Ajustes, senão CHART_COLORS por índice
+          color: cat.color ?? CHART_COLORS[i % CHART_COLORS.length],
         }))
         .filter((d) => d.value > 0),
     [categories, expenses]
@@ -110,18 +124,19 @@ export function TabGraficos({
     return { totalAtual, totalAnterior, diff, percent };
   }, [expenses, prevMonthExpenses]);
 
-  // ✅ Metas — filtra categorias sem meta e sem gastos (evita barras vazias)
+  // ✅ Metas — filtra categorias sem meta e sem gastos, inclui cor
   const categoryGoals = useMemo(
     () =>
       categories
-        .map((cat) => {
+        .map((cat, i) => {
           const total = expenses
             .filter((e) => e.category_name === cat.name)
             .reduce((acc, curr) => acc + Number(curr.amount), 0);
           const meta = Number(cat.monthly_goal) || 0;
-          return { cat, total, meta };
+          const color = cat.color ?? CHART_COLORS[i % CHART_COLORS.length];
+          return { cat, total, meta, color };
         })
-        .filter(({ total, meta }) => total > 0 || meta > 0), // só mostra se tem dado
+        .filter(({ total, meta }) => total > 0 || meta > 0),
     [categories, expenses]
   );
 
@@ -441,8 +456,8 @@ export function TabGraficos({
                   dataKey="value"
                   isAnimationActive
                 >
-                  {chartData.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  {chartData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v: number) => formatCurrency(v)} />
@@ -452,14 +467,14 @@ export function TabGraficos({
             <p className="text-center text-slate-300 py-10 text-sm italic">Sem dados</p>
           )}
         </div>
-        {/* ✅ Legenda das categorias abaixo do gráfico */}
+        {/* ✅ Legenda com cor real de cada categoria */}
         {chartData.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {chartData.map((d, i) => (
               <div key={i} className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <span
                   className="w-2 h-2 rounded-full inline-block"
-                  style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
+                  style={{ background: d.color }}
                   aria-hidden="true"
                 />
                 {d.name}
@@ -481,10 +496,10 @@ export function TabGraficos({
           </p>
         ) : (
           <div className="space-y-6">
-            {categoryGoals.map(({ cat, total, meta }) => {
+            {categoryGoals.map(({ cat, total, meta, color }) => {
               const barMax = Math.max(total, meta);
-              const blueWidth = barMax > 0 ? (Math.min(total, meta) / barMax) * 100 : 0;
-              const redWidth = barMax > 0 && total > meta ? ((total - meta) / barMax) * 100 : 0;
+              const filledWidth = barMax > 0 ? (Math.min(total, meta) / barMax) * 100 : 0;
+              const overflowWidth = barMax > 0 && total > meta ? ((total - meta) / barMax) * 100 : 0;
               const isOver = meta > 0 && total > meta;
               const hasMeta = meta > 0;
               const percentUsed = hasMeta ? Math.min((total / meta) * 100, 100) : null;
@@ -498,10 +513,17 @@ export function TabGraficos({
                   aria-valuenow={total}
                   aria-valuemax={meta || undefined}
                 >
-                  <div className="flex justify-between items-baseline text-[11px] font-bold">
-                    <span className="text-slate-700 dark:text-slate-300">{cat.name}</span>
+                  <div className="flex justify-between items-center">
+                    {/* ✅ Nome da categoria com bolinha colorida */}
                     <div className="flex items-center gap-2">
-                      {/* ✅ % de uso da meta */}
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: color }}
+                        aria-hidden="true"
+                      />
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{cat.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       {percentUsed !== null && (
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg ${
                           isOver
@@ -513,7 +535,7 @@ export function TabGraficos({
                           {percentUsed.toFixed(0)}%
                         </span>
                       )}
-                      <span className={isOver ? 'text-red-500' : 'text-slate-400'}>
+                      <span className={`text-[11px] font-bold ${isOver ? 'text-red-500' : 'text-slate-400'}`}>
                         {formatCurrency(total)}
                         {hasMeta && (
                           <span className="text-slate-400 font-black"> / {formatCurrency(meta)}</span>
@@ -524,24 +546,27 @@ export function TabGraficos({
 
                   {hasMeta ? (
                     <div className="h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                      {/* ✅ Barra preenchida com a cor da categoria */}
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${blueWidth}%` }}
+                        animate={{ width: `${filledWidth}%` }}
                         transition={{ duration: 0.7, ease: 'easeOut' }}
-                        className={`h-full ${isOver ? 'bg-blue-600' : 'bg-blue-400'}`}
+                        className="h-full"
+                        style={{ backgroundColor: color }}
                       />
+                      {/* Overflow em vermelho quando ultrapassa a meta */}
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${redWidth}%` }}
+                        animate={{ width: `${overflowWidth}%` }}
                         transition={{ duration: 0.7, ease: 'easeOut', delay: 0.1 }}
                         className="h-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
                       />
                     </div>
                   ) : (
-                    // ✅ Sem meta: mostra barra neutra + aviso
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div className="h-full bg-slate-300 dark:bg-slate-600 w-full" />
+                        {/* ✅ Barra sem meta também usa a cor da categoria */}
+                        <div className="h-full w-full opacity-30" style={{ backgroundColor: color }} />
                       </div>
                       <span className="text-[8px] font-black uppercase text-slate-300 dark:text-slate-600 whitespace-nowrap">
                         Sem meta

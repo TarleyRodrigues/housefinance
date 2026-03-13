@@ -1,53 +1,73 @@
 // ─── TIPOS GLOBAIS DO APP ────────────────────────────────────────────────────
 // src/types/index.ts
-// ✅ ShoppingItem: adicionados quantity e estimated_price
-// ✅ Todos os outros tipos preservados intactos
+// ✅ profiles? sempre Profile (objeto único) — normalização feita no useDashboardData
+// ✅ description? — opcional para queries parciais
+// ✅ Category: color
+// ✅ ShoppingItem: quantity e estimated_price
 
-export interface Expense {
-  id: string;
-  amount: number;
-  category_name: string;
-  description: string;
-  receipt_url?: string;
-  user_id: string;
-  created_at: string;
-  is_deleted: boolean;
-  profiles?: Profile;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  monthly_goal?: number;
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
 export interface Profile {
   id: string;
   full_name: string;
   avatar_url?: string;
-  email?: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Expense
+// ─────────────────────────────────────────────────────────────────────────────
+export interface Expense {
+  id: string;
+  amount: number;
+  category_name: string;
+  description?: string;   // opcional — queries parciais podem omitir
+  receipt_url?: string;
+  user_id: string;
+  created_at: string;
+  is_deleted: boolean;
+  profiles?: Profile;     // sempre objeto — normalizado no useDashboardData
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category
+// ─────────────────────────────────────────────────────────────────────────────
+export interface Category {
+  id: string;
+  name: string;
+  monthly_goal?: number;
+  color?: string;         // alter table categories add column if not exists color text;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ShoppingItem
+// ─────────────────────────────────────────────────────────────────────────────
 export interface ShoppingItem {
   id: string;
   item_name: string;
   is_pending: boolean;
   user_id: string;
   created_at: string;
-  quantity?: number;        // ✅ NOVO — coluna adicionada via SQL no Supabase
-  estimated_price?: number; // ✅ NOVO — coluna adicionada via SQL no Supabase
-  profiles?: Profile;
+  quantity?: number;        // alter table shopping_list add column if not exists quantity int default 1;
+  estimated_price?: number; // alter table shopping_list add column if not exists estimated_price numeric;
+  profiles?: Profile;       // sempre objeto — normalizado no useDashboardData
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reminder
+// ─────────────────────────────────────────────────────────────────────────────
 export interface Reminder {
   id: string;
   text: string;
   reminder_date: string;
   reminder_time?: string;
   user_id: string;
-  profiles?: Profile;
+  profiles?: Profile;     // sempre objeto — normalizado no useDashboardData
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Note
+// ─────────────────────────────────────────────────────────────────────────────
 export interface Note {
   id: string;
   title: string;
@@ -57,6 +77,9 @@ export interface Note {
   created_at: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UI
+// ─────────────────────────────────────────────────────────────────────────────
 export interface ToastState {
   msg: string;
   type: string;
@@ -71,14 +94,3 @@ export type TabName =
   | 'stats'
   | 'config'
   | 'logs';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ⚠️  LEMBRETE: rodar no SQL Editor do Supabase se ainda não fez:
-//
-//   alter table shopping_list
-//     add column if not exists quantity int default 1;
-//
-//   alter table shopping_list
-//     add column if not exists estimated_price numeric;
-//
-// ─────────────────────────────────────────────────────────────────────────────
