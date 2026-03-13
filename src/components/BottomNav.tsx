@@ -14,14 +14,14 @@ import {
 export default function BottomNav({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
   const tabs = [
     { id: 'list',      icon: LayoutDashboard,   label: 'Extrato'    },
-    { id: 'dreams',    icon: Target,            label: 'Sonhos'     }, // NOVO
-    { id: 'recipes',   icon: UtensilsCrossed,   label: 'Receitas'   }, // NOVO
     { id: 'add',       icon: PlusCircle,        label: 'Novo Gasto' },
     { id: 'shopping',  icon: ShoppingCart,      label: 'Compras'    },
     { id: 'stats',     icon: PieChart,          label: 'Gráficos'   },
     { id: 'movies',    icon: Clapperboard,      label: 'Filmes'     },
     { id: 'notes',     icon: StickyNote,        label: 'Notas'      },
     { id: 'reminders', icon: Bell,              label: 'Avisos'     },
+    { id: 'dreams',    icon: Target,            label: 'Sonhos'     }, // NOVO
+    { id: 'recipes',   icon: UtensilsCrossed,   label: 'Receitas'   }, // NOVO
     { id: 'config',    icon: Settings,          label: 'Ajustes'    },
   ];
 
