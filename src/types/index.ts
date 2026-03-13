@@ -36,7 +36,8 @@ export interface Category {
   id: string;
   name: string;
   monthly_goal?: number;
-  color?: string;         // alter table categories add column if not exists color text;
+  color?: string;
+  is_active: boolean;       
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,5 +119,20 @@ export interface WatchlistItem {
   year: string | null;
   media_type: 'movie' | 'tv';
   status: WatchStatus;
+  created_at: string;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dream (Sonhos & Objetivos)
+// ─────────────────────────────────────────────────────────────────────────────
+export interface Dream {
+  id: string;
+  user_id: string;
+  title: string;
+  target_value: number;
+  image_url: string | null;
+  category_id: string;
+  is_completed: boolean;
   created_at: string;
 }

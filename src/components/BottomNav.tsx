@@ -1,15 +1,28 @@
-import { LayoutDashboard, PlusCircle, Settings, ShoppingCart, Bell, StickyNote, PieChart, Clapperboard } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  PlusCircle, 
+  Settings, 
+  ShoppingCart, 
+  Bell, 
+  StickyNote, 
+  PieChart, 
+  Clapperboard, 
+  Target, 
+  UtensilsCrossed 
+} from 'lucide-react';
 
 export default function BottomNav({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
   const tabs = [
-    { id: 'list',      icon: LayoutDashboard, label: 'Extrato'    },
-    { id: 'add',       icon: PlusCircle,      label: 'Novo Gasto' },
-    { id: 'stats',     icon: PieChart,        label: 'Gráficos'   },
-    { id: 'shopping',  icon: ShoppingCart,    label: 'Compras'    },
-    { id: 'movies',    icon: Clapperboard,    label: 'Filmes'     },
-    { id: 'notes',     icon: StickyNote,      label: 'Notas'      },
-    { id: 'reminders', icon: Bell,            label: 'Avisos'     },
-    { id: 'config',    icon: Settings,        label: 'Ajustes'    },
+    { id: 'list',      icon: LayoutDashboard,   label: 'Extrato'    },
+    { id: 'dreams',    icon: Target,            label: 'Sonhos'     }, // NOVO
+    { id: 'recipes',   icon: UtensilsCrossed,   label: 'Receitas'   }, // NOVO
+    { id: 'add',       icon: PlusCircle,        label: 'Novo Gasto' },
+    { id: 'shopping',  icon: ShoppingCart,      label: 'Compras'    },
+    { id: 'stats',     icon: PieChart,          label: 'Gráficos'   },
+    { id: 'movies',    icon: Clapperboard,      label: 'Filmes'     },
+    { id: 'notes',     icon: StickyNote,        label: 'Notas'      },
+    { id: 'reminders', icon: Bell,              label: 'Avisos'     },
+    { id: 'config',    icon: Settings,          label: 'Ajustes'    },
   ];
 
   return (
@@ -20,7 +33,7 @@ export default function BottomNav({ activeTab, setActiveTab }: { activeTab: stri
           onClick={() => setActiveTab(tab.id)}
           aria-label={tab.label}
           aria-current={activeTab === tab.id ? 'page' : undefined}
-          className={`flex flex-col items-center gap-1.5 transition-all min-w-[72px] flex-shrink-0 snap-center ${
+          className={`flex flex-col items-center gap-1.5 transition-all min-w-[75px] flex-shrink-0 snap-center ${
             activeTab === tab.id ? 'text-blue-600 scale-110' : 'text-slate-400 dark:text-slate-500'
           }`}
         >
@@ -31,7 +44,7 @@ export default function BottomNav({ activeTab, setActiveTab }: { activeTab: stri
             {tab.label}
           </span>
           {activeTab === tab.id && (
-            <div className="w-1 h-1 bg-blue-600 rounded-full mt-0.5" />
+            <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-0.5" />
           )}
         </button>
       ))}

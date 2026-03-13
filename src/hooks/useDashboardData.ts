@@ -5,6 +5,7 @@
 // ✅ logs lazy — só na aba 'logs'
 // ✅ watchlist lazy — só na aba 'movies'
 // ✅ Tratamento de erro exposto
+// ✅ Busca de sonhos (dreams) integrada
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
@@ -12,7 +13,7 @@ import { useAuth } from '../AuthContext';
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
-  WatchlistCategory, WatchlistItem,
+  WatchlistCategory, WatchlistItem, Dream // Adicionado Dream nas importações
 } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const { user } = useAuth();
 
   const [expenses, setExpenses]                     = useState<Expense[]>([]);
-  const [prevMonthExpenses, setPrevMonthExpenses]    = useState<Expense[]>([]);
+  const [prevMonthExpenses, setPrevMonthExpenses]   = useState<Expense[]>([]);
   const [prevMonthTotal, setPrevMonthTotal]          = useState(0);
   const [categories, setCategories]                 = useState<Category[]>([]);
   const [shoppingList, setShoppingList]             = useState<ShoppingItem[]>([]);
@@ -58,6 +59,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [userProfile, setUserProfile]               = useState<Profile | null>(null);
   const [watchlistCategories, setWatchlistCategories] = useState<WatchlistCategory[]>([]);
   const [watchlistItems, setWatchlistItems]         = useState<WatchlistItem[]>([]);
+  const [dreams, setDreams]                         = useState<Dream[]>([]); // Estado para os sonhos
   const [isLoading, setIsLoading]                   = useState(true);
   const [error, setError]                           = useState<string | null>(null);
 
@@ -139,7 +141,15 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         }))
       );
 
-      // 6. Queries lazy por aba ──────────────────────────────────────────────
+      // 6. Sonhos (Sempre carrega junto com os dados principais)
+      const { data: dData, error: dErr } = await supabase
+        .from('dreams')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (dErr) throw dErr;
+      setDreams((dData ?? []) as Dream[]);
+
+      // 7. Queries lazy por aba ──────────────────────────────────────────────
 
       if (activeTab === 'notes') {
         const { data: n, error: notesErr } = await supabase
@@ -181,7 +191,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setLogs(normalizeProfiles((logData ?? []) as unknown as Log[]));
       }
 
-      // ✅ NOVO — Watchlist lazy: só busca na aba 'movies'
+      // ✅ Watchlist lazy: só busca na aba 'movies'
       if (activeTab === 'movies') {
         const { data: wCats, error: wCatsErr } = await supabase
           .from('watchlist_categories')
@@ -224,6 +234,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     userProfile,
     watchlistCategories,
     watchlistItems,
+    dreams, // Retornando o estado dos sonhos
     isLoading,
     error,
     fetchData,
