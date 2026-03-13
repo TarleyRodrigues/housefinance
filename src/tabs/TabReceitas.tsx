@@ -1,15 +1,15 @@
 // ─── ABA: RECEITAS ────────────────────────────────────────────────────────────
-// API: TheMealDB (gratuita, sem limite, sem chave)
-// Busca funciona em inglês/espanhol mas os resultados são traduzidos automaticamente
-// via MyMemory API (gratuita, sem chave, 5000 chars/dia por IP)
-// Culinária brasileira: filtro por área "Brazilian" retorna pratos nacionais
-// ✅ Busca por nome em PT → traduz para EN → busca na MealDB → traduz resultado de volta
-// ✅ Busca rápida por categorias brasileiras sem tradução
-// ✅ Ingredientes editáveis antes de enviar para a lista de compras
+// ✅ CORREÇÕES APLICADAS:
+// ✅ Carrega receitas BRASILEIRAS por padrão ao abrir a aba
+// ✅ Busca por texto agora filtra DENTRO das receitas brasileiras primeiro
+// ✅ Fallback para busca global se não achar nada no acervo brasileiro
+// ✅ Indicador visual claro quando o resultado vem de busca global
+// ✅ Filtros reordenados: 🇧🇷 Brasileira primeiro e em destaque
+// ✅ Badge "Receita Internacional" nos cards quando não for brasileira
 
 import { useState, useEffect } from 'react';
 import {
-  Search, X, Check, Trash2, Plus, ChevronDown,
+  Search, X, Check, Trash2, Plus,
   Loader2, UtensilsCrossed, ArrowLeft, Globe,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -28,7 +28,7 @@ interface Meal {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Culinária brasileira e latina — retorna direto da MealDB por área
+// Filtros rápidos — Brasileira em destaque, primeiro da lista
 // ─────────────────────────────────────────────────────────────────────────────
 const QUICK_FILTERS = [
   { label: '🇧🇷 Brasileira', area: 'Brazilian'  },
@@ -39,7 +39,29 @@ const QUICK_FILTERS = [
   { label: '🥗 Saladas',     query: 'salad'     },
 ];
 
-// Traduções de nomes de pratos conhecidos para exibição
+// Termos de busca em inglês para mapear culinária brasileira
+const TERMOS_BRASILEIROS: Record<string, string[]> = {
+  'frango':    ['chicken'],
+  'carne':     ['beef', 'meat'],
+  'peixe':     ['fish'],
+  'arroz':     ['rice'],
+  'feijão':    ['beans'],
+  'feijoada':  ['feijoada'],
+  'pão':       ['bread'],
+  'bolo':      ['cake'],
+  'sopa':      ['soup'],
+  'salada':    ['salad'],
+  'macarrão':  ['pasta'],
+  'porco':     ['pork'],
+  'camarão':   ['shrimp', 'prawn'],
+  'ovo':       ['egg'],
+  'queijo':    ['cheese'],
+  'doce':      ['sweet', 'dessert'],
+  'torta':     ['pie', 'tart'],
+  'mandioca':  ['cassava', 'yuca'],
+  'batata':    ['potato'],
+};
+
 const MEAL_TRANSLATIONS: Record<string, string> = {
   'Chicken': 'Frango', 'Beef': 'Carne', 'Pork': 'Porco', 'Lamb': 'Cordeiro',
   'Fish': 'Peixe', 'Pasta': 'Macarrão', 'Soup': 'Sopa', 'Salad': 'Salada',
@@ -49,7 +71,6 @@ const MEAL_TRANSLATIONS: Record<string, string> = {
   'Creamy': 'Cremoso', 'Spicy': 'Apimentado',
 };
 
-// Traduz palavras conhecidas no nome do prato (simples, sem API)
 function translateMealName(name: string): string {
   let result = name;
   for (const [en, pt] of Object.entries(MEAL_TRANSLATIONS)) {
@@ -58,14 +79,8 @@ function translateMealName(name: string): string {
   return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MyMemory API — tradução gratuita sem chave
-// Usado para: traduzir busca PT→EN e instruções EN→PT
-// Limite: 5000 chars/dia por IP (mais do que suficiente para uso pessoal)
-// ─────────────────────────────────────────────────────────────────────────────
 async function translate(text: string, from: string, to: string): Promise<string> {
   if (!text || text.length < 3) return text;
-  // Limita para não estourar o limite diário
   const truncated = text.slice(0, 800);
   try {
     const res = await fetch(
@@ -74,8 +89,58 @@ async function translate(text: string, from: string, to: string): Promise<string
     const data = await res.json();
     return data?.responseData?.translatedText ?? text;
   } catch {
-    return text; // fallback: retorna original se falhar
+    return text;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Busca receitas brasileiras que contenham o ingrediente/prato
+// Estratégia: busca global pelo termo EN → filtra apenas area === 'Brazilian'
+// Se não achar nada, retorna busca global com flag isGlobal
+// ─────────────────────────────────────────────────────────────────────────────
+async function searchBrazilianFirst(queryPt: string): Promise<{ meals: Meal[]; isGlobal: boolean }> {
+  const queryLower = queryPt.toLowerCase().trim();
+
+  // Resolve termos em inglês para a query
+  const termsEn: string[] = [];
+
+  // 1. Checa mapa local de termos brasileiros
+  for (const [ptKey, enTerms] of Object.entries(TERMOS_BRASILEIROS)) {
+    if (queryLower.includes(ptKey)) {
+      termsEn.push(...enTerms);
+    }
+  }
+
+  // 2. Se não achou no mapa, tenta a própria query como EN e também traduz
+  if (termsEn.length === 0) {
+    termsEn.push(queryPt); // tenta direto (pode já ser EN)
+    const translated = await translate(queryPt, 'pt-BR', 'en');
+    if (translated.toLowerCase() !== queryPt.toLowerCase()) {
+      termsEn.push(translated);
+    }
+  }
+
+  // 3. Busca todas as receitas brasileiras e filtra localmente
+  const brRes = await fetch('https://www.themealdb.com/api/json/v1/1/filter.php?a=Brazilian');
+  const brData = await brRes.json();
+  const brazilianMeals: Meal[] = brData.meals ?? [];
+
+  // Filtra as brasileiras pelo nome usando os termos EN
+  const matched = brazilianMeals.filter((m) => {
+    const name = m.strMeal.toLowerCase();
+    return termsEn.some((term) => name.includes(term.toLowerCase()));
+  });
+
+  if (matched.length > 0) {
+    return { meals: matched.slice(0, 12), isGlobal: false };
+  }
+
+  // 4. Fallback: busca global com o primeiro termo
+  const globalRes = await fetch(
+    `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(termsEn[0] ?? queryPt)}`
+  );
+  const globalData = await globalRes.json();
+  return { meals: (globalData.meals ?? []).slice(0, 12), isGlobal: true };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,39 +156,50 @@ interface Props {
 // COMPONENTE
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props) {
-  const [query, setQuery]           = useState('');
-  const [meals, setMeals]           = useState<Meal[]>([]);
-  const [selected, setSelected]     = useState<Meal | null>(null);
-  const [editList, setEditList]     = useState<string[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [translating, setTranslating] = useState(false);
+  const [query, setQuery]               = useState('');
+  const [meals, setMeals]               = useState<Meal[]>([]);
+  const [selected, setSelected]         = useState<Meal | null>(null);
+  const [editList, setEditList]         = useState<string[]>([]);
+  const [loading, setLoading]           = useState(false);
+  const [translating, setTranslating]   = useState(false);
   const [instructions, setInstructions] = useState('');
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string>('🇧🇷 Brasileira');
   const [sendingToCart, setSendingToCart] = useState(false);
+  const [isGlobalResult, setIsGlobalResult] = useState(false);
 
-  // ── Busca com tradução PT→EN ───────────────────────────────────────────────
+  // ✅ Carrega receitas brasileiras ao montar a aba
+  useEffect(() => {
+    loadBrazilian();
+  }, []);
+
+  const loadBrazilian = async () => {
+    setLoading(true);
+    setActiveFilter('🇧🇷 Brasileira');
+    setIsGlobalResult(false);
+    try {
+      const res = await fetch('https://www.themealdb.com/api/json/v1/1/filter.php?a=Brazilian');
+      const data = await res.json();
+      setMeals(data.meals ?? []);
+    } catch {
+      showToast('Erro ao carregar receitas', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Busca: prioriza receitas brasileiras, fallback global com aviso
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
-    setActiveFilter(null);
+    setActiveFilter('');
     try {
-      // 1. Tenta buscar diretamente (funciona para nomes em inglês)
-      let url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
-      let res = await fetch(url);
-      let data = await res.json();
-
-      // 2. Se não encontrou, traduz o termo para inglês e tenta de novo
-      if (!data.meals || data.meals.length === 0) {
-        const translated = await translate(query, 'pt-BR', 'en');
-        if (translated && translated.toLowerCase() !== query.toLowerCase()) {
-          url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(translated)}`;
-          res = await fetch(url);
-          data = await res.json();
-        }
-      }
-      setMeals(data.meals ?? []);
-      if (!data.meals || data.meals.length === 0) {
+      const { meals: result, isGlobal } = await searchBrazilianFirst(query);
+      setMeals(result);
+      setIsGlobalResult(isGlobal);
+      if (result.length === 0) {
         showToast('Nenhuma receita encontrada. Tente outro termo.', 'info');
+      } else if (isGlobal) {
+        showToast('Nenhuma receita brasileira encontrada — mostrando resultados internacionais', 'info');
       }
     } catch {
       showToast('Erro ao buscar receitas', 'error');
@@ -132,17 +208,18 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
     }
   };
 
-  // ── Busca por filtro rápido (área ou termo em inglês) ──────────────────────
+  // Filtro rápido — mantém lógica original
   const handleFilter = async (filter: typeof QUICK_FILTERS[0]) => {
     setLoading(true);
     setActiveFilter(filter.label);
+    setIsGlobalResult(filter.label !== '🇧🇷 Brasileira');
     setQuery('');
     try {
       let url: string;
       if ('area' in filter) {
         url = `https://www.themealdb.com/api/json/v1/1/filter.php?a=${filter.area}`;
       } else {
-        url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${filter.query}`;
+        url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${(filter as { query: string }).query}`;
       }
       const res = await fetch(url);
       const data = await res.json();
@@ -154,7 +231,7 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
     }
   };
 
-  // ── Abre receita e carrega detalhes + tradução ─────────────────────────────
+  // Abre receita e carrega detalhes + tradução
   const handleOpenMeal = async (meal: Meal) => {
     setTranslating(true);
     setSelected(meal);
@@ -162,7 +239,6 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
     setEditList([]);
 
     try {
-      // Se veio do filtro por área, só tem thumbnail — busca detalhes completos
       let fullMeal = meal;
       if (!meal.strInstructions) {
         const res = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`);
@@ -171,7 +247,6 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
         setSelected(fullMeal);
       }
 
-      // Extrai ingredientes
       const ingredients: string[] = [];
       for (let i = 1; i <= 20; i++) {
         const ing = fullMeal[`strIngredient${i}`];
@@ -181,13 +256,11 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
         }
       }
 
-      // Traduz ingredientes PT (lista já vem em inglês — traduzimos)
       const translatedIngredients = await Promise.all(
         ingredients.map((ing) => translate(ing, 'en', 'pt-BR'))
       );
       setEditList(translatedIngredients);
 
-      // Traduz instruções
       if (fullMeal.strInstructions) {
         const translatedInstructions = await translate(fullMeal.strInstructions, 'en', 'pt-BR');
         setInstructions(translatedInstructions);
@@ -202,7 +275,6 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
     }
   };
 
-  // ── Envia para lista de compras ────────────────────────────────────────────
   const handleSendToCart = async () => {
     const items = editList.filter((i) => i.trim());
     if (items.length === 0) return;
@@ -219,14 +291,17 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
     }
   };
 
+  const isBrazilian = (meal: Meal) =>
+    meal.strArea === 'Brazilian' || activeFilter === '🇧🇷 Brasileira';
+
   return (
     <div className="space-y-4 pb-10">
 
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-orange-500 to-red-500 p-5 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-green-600 via-green-500 to-yellow-400 p-5 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-60 block mb-1">
-            Buscar Receitas
+          <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-70 block mb-1">
+            🇧🇷 Culinária Brasileira
           </span>
           <h2 className="text-2xl font-black uppercase tracking-tighter leading-none mb-4">
             O que vamos comer?
@@ -235,8 +310,8 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
             <label htmlFor="recipe-search" className="sr-only">Buscar receita em português</label>
             <input
               id="recipe-search"
-              className="flex-1 p-3.5 bg-white/15 backdrop-blur-sm rounded-2xl outline-none border border-white/20 text-sm font-bold placeholder:text-white/50 focus:border-white/40 transition-colors"
-              placeholder="Ex: frango, arroz, bolo..."
+              className="flex-1 p-3.5 bg-white/15 backdrop-blur-sm rounded-2xl outline-none border border-white/20 text-sm font-bold placeholder:text-white/60 focus:border-white/50 transition-colors"
+              placeholder="Ex: frango, feijão, bolo..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -250,12 +325,30 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
               {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
             </button>
           </div>
-          <p className="text-[9px] text-white/50 font-bold mt-2 flex items-center gap-1">
-            <Globe size={9} /> Busca em português com tradução automática
+          <p className="text-[9px] text-white/60 font-bold mt-2 flex items-center gap-1">
+            🇧🇷 Prioriza receitas brasileiras — busca internacional como fallback
           </p>
         </div>
-        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-yellow-400/20 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -left-4 -top-4 w-24 h-24 bg-green-800/20 rounded-full blur-2xl pointer-events-none" />
       </div>
+
+      {/* ✅ Aviso de resultado internacional */}
+      <AnimatePresence>
+        {isGlobalResult && meals.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 rounded-2xl"
+          >
+            <Globe size={14} className="text-amber-500 shrink-0" />
+            <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+              Nenhuma receita brasileira encontrada — exibindo resultados internacionais
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── FILTROS RÁPIDOS ─────────────────────────────────────────────────── */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
@@ -267,7 +360,9 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
             aria-pressed={activeFilter === filter.label}
             className={`flex-shrink-0 px-3.5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50 ${
               activeFilter === filter.label
-                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
+                ? filter.label === '🇧🇷 Brasileira'
+                  ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
+                  : 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
             }`}
           >
@@ -279,7 +374,7 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
       {/* ── LOADING ─────────────────────────────────────────────────────────── */}
       {loading && (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
-          <Loader2 size={32} className="text-orange-400 animate-spin" />
+          <Loader2 size={32} className="text-green-500 animate-spin" />
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             Buscando receitas...
           </p>
@@ -290,41 +385,49 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
       {!loading && meals.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
           <AnimatePresence>
-            {meals.map((m) => (
-              <motion.button
-                key={m.idMeal}
-                layout
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.88 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleOpenMeal(m)}
-                aria-label={`Ver receita de ${translateMealName(m.strMeal)}`}
-                className="bg-white dark:bg-slate-800 rounded-[1.5rem] overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 text-left group"
-              >
-                <div className="relative aspect-square overflow-hidden">
-                  <img
-                    src={m.strMealThumb}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    alt={m.strMeal}
-                    loading="lazy"
-                  />
-                  {m.strArea && (
-                    <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg backdrop-blur-sm">
-                      {m.strArea}
+            {meals.map((m) => {
+              const isBr = isBrazilian(m);
+              return (
+                <motion.button
+                  key={m.idMeal}
+                  layout
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.88 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleOpenMeal(m)}
+                  aria-label={`Ver receita de ${translateMealName(m.strMeal)}`}
+                  className="bg-white dark:bg-slate-800 rounded-[1.5rem] overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 text-left group"
+                >
+                  <div className="relative aspect-square overflow-hidden">
+                    <img
+                      src={m.strMealThumb}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      alt={m.strMeal}
+                      loading="lazy"
+                    />
+                    {/* ✅ Badge: brasileiro ou internacional */}
+                    <span className={`absolute bottom-2 left-2 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg backdrop-blur-sm ${
+                      isBr
+                        ? 'bg-green-600/80'
+                        : 'bg-black/60'
+                    }`}>
+                      {isBr ? '🇧🇷' : (m.strArea ?? '🌍')}
                     </span>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p className="font-black text-[10px] uppercase tracking-tight leading-tight dark:text-white line-clamp-2">
-                    {translateMealName(m.strMeal)}
-                  </p>
-                  <p className="text-[8px] text-slate-400 mt-0.5 font-bold uppercase">
-                    {m.strMeal !== translateMealName(m.strMeal) ? m.strMeal : ''}
-                  </p>
-                </div>
-              </motion.button>
-            ))}
+                  </div>
+                  <div className="p-3">
+                    <p className="font-black text-[10px] uppercase tracking-tight leading-tight dark:text-white line-clamp-2">
+                      {translateMealName(m.strMeal)}
+                    </p>
+                    {!isBr && (
+                      <p className="text-[8px] text-slate-400 mt-0.5 font-bold flex items-center gap-1">
+                        <Globe size={7} /> Internacional
+                      </p>
+                    )}
+                  </div>
+                </motion.button>
+              );
+            })}
           </AnimatePresence>
         </div>
       )}
@@ -367,7 +470,12 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
                   {translateMealName(selected.strMeal)}
                 </p>
                 {selected.strArea && (
-                  <p className="text-[8px] text-slate-400 font-bold uppercase">{selected.strArea}</p>
+                  <p className="text-[8px] font-bold uppercase flex items-center gap-1 mt-0.5">
+                    {selected.strArea === 'Brazilian'
+                      ? <span className="text-green-500">🇧🇷 Receita Brasileira</span>
+                      : <span className="text-slate-400 flex items-center gap-1"><Globe size={8} /> {selected.strArea}</span>
+                    }
+                  </p>
                 )}
               </div>
 
@@ -375,7 +483,7 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
                 onClick={handleSendToCart}
                 disabled={sendingToCart || translating || editList.length === 0}
                 aria-label="Enviar ingredientes para lista de compras"
-                className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2.5 rounded-2xl text-[9px] font-black uppercase shadow-lg shadow-orange-500/30 active:scale-90 transition-all disabled:opacity-50"
+                className="flex items-center gap-2 bg-green-500 text-white px-4 py-2.5 rounded-2xl text-[9px] font-black uppercase shadow-lg shadow-green-500/30 active:scale-90 transition-all disabled:opacity-50"
               >
                 {sendingToCart
                   ? <Loader2 size={13} className="animate-spin" />
@@ -387,7 +495,6 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
 
             {/* Conteúdo com scroll */}
             <div className="flex-1 overflow-y-auto">
-              {/* Imagem */}
               <div className="relative">
                 <img
                   src={selected.strMealThumb}
@@ -401,7 +508,7 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
                 {/* Ingredientes */}
                 <section>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-black text-xs uppercase tracking-widest text-orange-500">
+                    <h3 className="font-black text-xs uppercase tracking-widest text-green-600 dark:text-green-400">
                       Ingredientes
                       {translating && <Loader2 size={10} className="inline ml-2 animate-spin text-slate-400" />}
                     </h3>
@@ -425,7 +532,7 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
                       {editList.map((ing, i) => (
                         <div key={i} className="flex gap-2 items-center">
                           <input
-                            className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl text-xs font-bold dark:text-white outline-none focus:border-orange-400 transition-colors"
+                            className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl text-xs font-bold dark:text-white outline-none focus:border-green-400 transition-colors"
                             value={ing}
                             onChange={(e) => {
                               const n = [...editList];
@@ -466,11 +573,11 @@ export function TabReceitas({ fetchData, showToast, onAddShoppingItems }: Props)
                   )}
                 </section>
 
-                {/* Botão inferior (redundante para facilidade) */}
+                {/* Botão inferior */}
                 <button
                   onClick={handleSendToCart}
                   disabled={sendingToCart || translating || editList.length === 0}
-                  className="w-full py-4 bg-orange-500 text-white font-black text-sm uppercase tracking-wider rounded-[2rem] shadow-xl shadow-orange-500/30 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-green-500 text-white font-black text-sm uppercase tracking-wider rounded-[2rem] shadow-xl shadow-green-500/30 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {sendingToCart
                     ? <><Loader2 size={16} className="animate-spin" /> Adicionando...</>

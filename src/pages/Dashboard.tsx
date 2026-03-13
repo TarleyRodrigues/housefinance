@@ -1,4 +1,5 @@
 // ─── DASHBOARD.TSX ───────────────────────────────────────────────────────────
+// ✅ TabFilmes integrada com todos os callbacks de watchlist
 // ✅ Padrão arquitetural consistente — zero supabase nos componentes filhos
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,10 +23,10 @@ import { TabGraficos }  from '../tabs/TabGraficos';
 import { TabAjustes }   from '../tabs/TabAjustes';
 import { TabLogs }      from '../tabs/TabLogs';
 import { TabFilmes }    from '../tabs/Tabfilmes';
-import { TabSonhos }    from '../tabs/TabSonhos';   // Nova Tab
-import { TabReceitas }  from '../tabs/TabReceitas'; // Nova Tab
+import { TabReceitas }  from '../tabs/TabReceitas';
+import { TabSonhos }    from '../tabs/TabSonhos';
 
-import type { Expense, WatchStatus } from '../types';
+import type { Expense, WatchStatus, Dream } from '../types';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -66,9 +67,9 @@ export default function Dashboard() {
   const {
     expenses, prevMonthExpenses, prevMonthTotal,
     categories, shoppingList, reminders, notes, logs,
-    dreams, // Certifique-se que o useDashboardData retorna 'dreams'
     annualChartData, userProfile,
     watchlistCategories, watchlistItems,
+    dreams,
     isLoading, fetchData,
   } = useDashboardData(currentDate, activeTab);
 
@@ -77,208 +78,372 @@ export default function Dashboard() {
   const nextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
   // ══════════════════════════════════════════════════════════════════════════
-  // CALLBACKS — lógica centralizada
+  // CALLBACKS — toda lógica de banco fica aqui, passa para filhos como props
   // ══════════════════════════════════════════════════════════════════════════
 
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }, []);
 
+  // ── Despesas ──────────────────────────────────────────────────────────────
   const deleteExpense = useCallback(async (id: string) => {
     const { error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', id);
     if (error) throw error;
-    fetchData();
-  }, [fetchData]);
+  }, []);
+
+  // ── Lembretes ─────────────────────────────────────────────────────────────
+  const saveReminder = useCallback(async ({
+    text, date, time, editId,
+  }: { text: string; date: string; time: string; editId: string | null }) => {
+    if (!user) throw new Error('Não autenticado');
+    const payload = { text, reminder_date: date, reminder_time: time || null, user_id: user.id };
+    if (editId) {
+      const { error } = await supabase.from('reminders').update(payload).eq('id', editId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('reminders').insert(payload);
+      if (error) throw error;
+    }
+  }, [user]);
+
+  const deleteReminder = useCallback(async (id: string) => {
+    const { error } = await supabase.from('reminders').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
+
+  // ── Lista de compras ──────────────────────────────────────────────────────
+  const addShoppingItem = useCallback(async ({ name, qty, price }: { name: string; qty: number; price: number | null }) => {
+    if (!user) throw new Error('Não autenticado');
+    const { error } = await supabase.from('shopping_list').insert({
+      item_name: name, quantity: qty, estimated_price: price, user_id: user.id,
+    });
+    if (error) throw error;
+  }, [user]);
+
+  const toggleShoppingItem = useCallback(async (id: string, current: boolean) => {
+    const { error } = await supabase.from('shopping_list').update({ is_pending: !current }).eq('id', id);
+    if (error) throw error;
+  }, []);
+
+  const deleteShoppingItem = useCallback(async (id: string) => {
+    const { error } = await supabase.from('shopping_list').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
+
+  const clearDoneItems = useCallback(async () => {
+    const ids = shoppingList.filter((i) => !i.is_pending).map((i) => i.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('shopping_list').delete().in('id', ids);
+    if (error) throw error;
+  }, [shoppingList]);
+
+  // ── Receitas → adiciona vários itens de uma vez na lista de compras ───────
+  const addShoppingItemsBulk = useCallback(async (items: string[]) => {
+    if (!user) throw new Error('Não autenticado');
+    const rows = items
+      .filter((i) => i.trim())
+      .map((item_name) => ({ item_name, user_id: user.id, is_pending: true }));
+    if (rows.length === 0) return;
+    const { error } = await supabase.from('shopping_list').insert(rows);
+    if (error) throw error;
+  }, [user]);
+
+  // ── Categorias de gastos ──────────────────────────────────────────────────
+  const addCategory = useCallback(async (name: string) => {
+    const { error } = await supabase.from('categories').insert({ name });
+    if (error) throw error;
+  }, []);
+
+  const updateCategory = useCallback(async ({
+    id, name, oldName, monthly_goal, color,
+  }: { id: string; name?: string; oldName?: string; monthly_goal?: number; color?: string }) => {
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined)         updates.name         = name;
+    if (monthly_goal !== undefined) updates.monthly_goal = monthly_goal;
+    if (color !== undefined)        updates.color        = color;
+    const { error } = await supabase.from('categories').update(updates).eq('id', id);
+    if (error) throw error;
+    if (name && oldName && name !== oldName) {
+      await supabase.from('expenses').update({ category_name: name }).eq('category_name', oldName);
+    }
+  }, []);
+
+  const deleteCategory = useCallback(async (id: string) => {
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
 
   // ── Sonhos ────────────────────────────────────────────────────────────────
-  const addDream = useCallback(async (title: string, target: number, image: string) => {
-    if (!user) return;
-    // 1. Cria Categoria correspondente
-    const { data: cat, error: catErr } = await supabase.from('categories').insert({ name: title }).select().single();
-    if (catErr) throw catErr;
-    // 2. Cria Sonho vinculado
-    const { error: dreamErr } = await supabase.from('dreams').insert({
-      title, target_value: target, image_url: image, category_id: cat.id, user_id: user.id
+  const addDream = useCallback(async (title: string, targetValue: number, imageUrl: string) => {
+    if (!user) throw new Error('Não autenticado');
+    const { error } = await supabase.from('dreams').insert({
+      title,
+      target_value: targetValue,
+      image_url: imageUrl || null,
+      is_completed: false,
+      user_id: user.id,
     });
-    if (dreamErr) throw dreamErr;
-    fetchData();
-  }, [user, fetchData]);
+    if (error) throw error;
+  }, [user]);
+
+  const deleteDream = useCallback(async (id: string) => {
+    const { error } = await supabase.from('dreams').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
 
   const completeDream = useCallback(async (dreamId: string, categoryId: string) => {
-    // Marca sonho como feito e inativa a categoria para novos lançamentos
     await supabase.from('dreams').update({ is_completed: true }).eq('id', dreamId);
     await supabase.from('categories').update({ is_active: false }).eq('id', categoryId);
     fetchData();
   }, [fetchData]);
 
+  const updateDream = useCallback(async (
+    id: string,
+    updates: { title?: string; target_value?: number; image_url?: string }
+  ) => {
+    const { error } = await supabase.from('dreams').update(updates).eq('id', id);
+    if (error) throw error;
+    fetchData();
+  }, [fetchData]);
+
+  // Registra um aporte como gasto na categoria com o nome do sonho
   const quickSaveDream = useCallback(async (categoryName: string, amount: number) => {
-    if (!user) return;
-    await supabase.from('expenses').insert({
-      amount, category_name: categoryName, description: 'Economia para Sonho', user_id: user.id
-    });
-    fetchData();
-  }, [user, fetchData]);
+    if (!user) throw new Error('Não autenticado');
+    // Garante que a categoria existe — upsert pelo nome
+    const { data: existingCat } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('name', categoryName)
+      .maybeSingle();
 
-  // ── Receitas -> Compras ──────────────────────────────────────────────────
-  const addManyShoppingItems = useCallback(async (items: string[]) => {
-    if (!user) return;
-    const payload = items.filter(i => i.trim() !== '').map(item => ({
-      item_name: item, user_id: user.id
-    }));
-    const { error } = await supabase.from('shopping_list').insert(payload);
-    if (error) throw error;
-    showToast(`${items.length} itens na lista!`);
-    fetchData();
-  }, [user, fetchData, showToast]);
-
-  // ── Lembretes, Compras e Categorias (Mantidos conforme sua versão) ────────
-  const saveReminder = useCallback(async ({ text, date, time, editId }: any) => {
-    const payload = { text, reminder_date: date, reminder_time: time || null, user_id: user?.id };
-    const { error } = editId ? await supabase.from('reminders').update(payload).eq('id', editId) : await supabase.from('reminders').insert(payload);
-    if (error) throw error;
-    fetchData();
-  }, [user, fetchData]);
-
-  const deleteReminder = useCallback(async (id: string) => {
-    await supabase.from('reminders').delete().eq('id', id);
-    fetchData();
-  }, [fetchData]);
-
-  const addShoppingItem = useCallback(async ({ name, qty, price }: any) => {
-    await supabase.from('shopping_list').insert({ item_name: name, quantity: qty, estimated_price: price, user_id: user?.id });
-    fetchData();
-  }, [user, fetchData]);
-
-  const toggleShoppingItem = useCallback(async (id: string, current: boolean) => {
-    await supabase.from('shopping_list').update({ is_pending: !current }).eq('id', id);
-    fetchData();
-  }, [fetchData]);
-
-  const deleteShoppingItem = useCallback(async (id: string) => {
-    await supabase.from('shopping_list').delete().eq('id', id);
-    fetchData();
-  }, [fetchData]);
-
-  const clearDoneItems = useCallback(async () => {
-    const ids = shoppingList.filter((i) => !i.is_pending).map((i) => i.id);
-    if (ids.length > 0) await supabase.from('shopping_list').delete().in('id', ids);
-    fetchData();
-  }, [shoppingList, fetchData]);
-
-  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color }: any) => {
-    await supabase.from('categories').update({ name, monthly_goal, color }).eq('id', id);
-    if (name && oldName && name !== oldName) {
-      await supabase.from('expenses').update({ category_name: name }).eq('category_name', oldName);
+    if (!existingCat) {
+      await supabase.from('categories').insert({ name: categoryName });
     }
-    fetchData();
-  }, [fetchData]);
+    // Registra como despesa rastreável
+    const { error } = await supabase.from('expenses').insert({
+      amount,
+      category_name: categoryName,
+      description: `Poupança: ${categoryName}`,
+      user_id: user.id,
+      is_deleted: false,
+    });
+    if (error) throw error;
+  }, [user]);
 
-  // ── Watchlist Handlers ───────────────────────────────────────────────────
+  // ── Watchlist: categorias ─────────────────────────────────────────────────
   const addWatchlistCategory = useCallback(async (name: string) => {
-    await supabase.from('watchlist_categories').insert({ name, user_id: user?.id });
-    fetchData();
-  }, [user, fetchData]);
+    if (!user) throw new Error('Não autenticado');
+    const { error } = await supabase.from('watchlist_categories').insert({ name, user_id: user.id });
+    if (error) throw error;
+  }, [user]);
 
   const deleteWatchlistCategory = useCallback(async (id: string) => {
-    await supabase.from('watchlist_categories').delete().eq('id', id);
-    fetchData();
-  }, [fetchData]);
+    // ON DELETE CASCADE na FK apaga os items vinculados automaticamente
+    const { error } = await supabase.from('watchlist_categories').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
 
-  const addWatchlistItem = useCallback(async (payload: any) => {
-    await supabase.from('watchlist_items').insert({ ...payload, user_id: user?.id, status: 'want' });
-    fetchData();
-  }, [user, fetchData]);
+  // ── Watchlist: items ──────────────────────────────────────────────────────
+  const addWatchlistItem = useCallback(async (payload: {
+    category_id: string;
+    tmdb_id: number;
+    title: string;
+    poster_url: string | null;
+    synopsis: string | null;
+    year: string | null;
+    media_type: 'movie' | 'tv';
+  }) => {
+    if (!user) throw new Error('Não autenticado');
+    const { error } = await supabase.from('watchlist_items').insert({
+      ...payload,
+      user_id: user.id,
+      status: 'want',
+    });
+    if (error) throw error;
+  }, [user]);
 
   const changeWatchlistStatus = useCallback(async (id: string, status: WatchStatus) => {
-    await supabase.from('watchlist_items').update({ status }).eq('id', id);
-    fetchData();
-  }, [fetchData]);
+    const { error } = await supabase.from('watchlist_items').update({ status }).eq('id', id);
+    if (error) throw error;
+  }, []);
 
   const deleteWatchlistItem = useCallback(async (id: string) => {
-    await supabase.from('watchlist_items').delete().eq('id', id);
-    fetchData();
-  }, [fetchData]);
+    const { error } = await supabase.from('watchlist_items').delete().eq('id', id);
+    if (error) throw error;
+  }, []);
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className={`pb-32 pt-4 px-4 max-w-md mx-auto min-h-screen font-sans transition-colors duration-300 ${
       isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'
     }`}>
 
-      <AnimatePresence>{toast && <Toast message={toast.msg} type={toast.type} />}</AnimatePresence>
+      <AnimatePresence>
+        {toast && <Toast message={toast.msg} type={toast.type} />}
+      </AnimatePresence>
 
-      {activeTab !== 'movies' && activeTab !== 'recipes' && (
+      {/* Header — oculto na aba de filmes para aproveitar o espaço */}
+      {activeTab !== 'movies' && (
         <div className="flex items-center justify-between mb-4 bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
-          <button onClick={prevMonth} className="p-2 active:scale-90 transition-transform"><ChevronLeft className="text-slate-400" /></button>
+          <button onClick={prevMonth} aria-label="Mês anterior" className="p-2 active:scale-90 transition-transform">
+            <ChevronLeft className="text-slate-400" />
+          </button>
           <div className="flex flex-col items-center">
             <h2 className="font-black text-lg capitalize leading-none text-slate-800 dark:text-white">
               {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
             </h2>
-            <button onClick={() => window.location.reload()} className="flex items-center gap-1 mt-1 text-[9px] font-black text-blue-500 uppercase tracking-widest active:scale-95 transition-transform">
-              <RefreshCcw size={10} /> ATUALIZAR APP
+            <button
+              onClick={() => window.location.reload()}
+              aria-label="Atualizar aplicativo"
+              className="flex items-center gap-1 mt-1 text-[9px] font-black text-blue-500 uppercase tracking-widest active:scale-95 transition-transform"
+            >
+              <RefreshCcw size={10} aria-hidden="true" /> ATUALIZAR APP
             </button>
           </div>
-          <button onClick={nextMonth} className="p-2 active:scale-90 transition-transform"><ChevronRight className="text-slate-400" /></button>
+          <button onClick={nextMonth} aria-label="Próximo mês" className="p-2 active:scale-90 transition-transform">
+            <ChevronRight className="text-slate-400" />
+          </button>
         </div>
       )}
 
+      {/* Abas */}
       <AnimatePresence mode="wait">
-        <motion.div key={activeTab + currentDate.toISOString()} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
-          
+        <motion.div
+          key={activeTab + currentDate.toISOString()}
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ duration: 0.2 }}
+        >
           {activeTab === 'list' && (
-            <TabExtrato expenses={expenses} categories={categories} prevMonthTotal={prevMonthTotal} isLoading={isLoading} currentDate={currentDate} fetchData={fetchData} showToast={showToast} onEdit={handleEditExpense} onViewReceipt={setViewingReceipt} onDelete={deleteExpense} />
-          )}
-
-          {activeTab === 'dreams' && (
-            <TabSonhos dreams={dreams} expenses={expenses} fetchData={fetchData} showToast={showToast} onAddDream={addDream} onCompleteDream={completeDream} onQuickSave={quickSaveDream} />
-          )}
-
-          {activeTab === 'recipes' && (
-            <TabReceitas fetchData={fetchData} showToast={showToast} onAddShoppingItems={addManyShoppingItems} />
+            <TabExtrato
+              expenses={expenses} categories={categories}
+              prevMonthTotal={prevMonthTotal} isLoading={isLoading}
+              currentDate={currentDate} fetchData={fetchData}
+              showToast={showToast} onEdit={handleEditExpense}
+              onViewReceipt={setViewingReceipt} onDelete={deleteExpense}
+            />
           )}
 
           {activeTab === 'add' && (
-            <TabNovoGasto categories={categories.filter(c => c.is_active || c.name === editingExpense?.category_name)} editingExpense={editingExpense} fetchData={fetchData} showToast={showToast} onSaved={() => setActiveTab('list')} />
+            <TabNovoGasto
+              categories={categories} editingExpense={editingExpense}
+              fetchData={fetchData} showToast={showToast}
+              onSaved={() => setActiveTab('list')}
+            />
           )}
 
           {activeTab === 'shopping' && (
-            <TabCompras shoppingList={shoppingList} fetchData={fetchData} showToast={showToast} onAdd={addShoppingItem} onToggle={toggleShoppingItem} onDelete={deleteShoppingItem} onClearDone={clearDoneItems} />
+            <TabCompras
+              shoppingList={shoppingList} fetchData={fetchData}
+              showToast={showToast} onAdd={addShoppingItem}
+              onToggle={toggleShoppingItem} onDelete={deleteShoppingItem}
+              onClearDone={clearDoneItems}
+            />
           )}
 
-          {activeTab === 'notes' && <TabNotas notes={notes} fetchData={fetchData} showToast={showToast} />}
+          {activeTab === 'notes' && (
+            <TabNotas notes={notes} fetchData={fetchData} showToast={showToast} />
+          )}
 
           {activeTab === 'reminders' && (
-            <TabAvisos reminders={reminders} fetchData={fetchData} showToast={showToast} onSave={saveReminder} onDelete={deleteReminder} />
+            <TabAvisos
+              reminders={reminders} fetchData={fetchData}
+              showToast={showToast} onSave={saveReminder} onDelete={deleteReminder}
+            />
           )}
 
           {activeTab === 'stats' && (
-            <TabGraficos expenses={expenses} prevMonthExpenses={prevMonthExpenses} categories={categories} annualChartData={annualChartData} currentDate={currentDate} showToast={showToast} />
+            <TabGraficos
+              expenses={expenses} prevMonthExpenses={prevMonthExpenses}
+              categories={categories} annualChartData={annualChartData}
+              currentDate={currentDate} showToast={showToast}
+            />
           )}
 
           {activeTab === 'config' && (
-            <TabAjustes userProfile={userProfile} categories={categories} expenses={expenses} currentDate={currentDate} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} fetchData={fetchData} showToast={showToast} onOpenLogs={() => setActiveTab('logs')} onSignOut={signOut} onAddCategory={async (n) => { 
-  await supabase.from('categories').insert({ name: n }); 
-  await fetchData(); 
-}}  onUpdateCategory={updateCategory} onDeleteCategory={async (id) => { 
-  await supabase.from('categories').delete().eq('id', id); 
-  await fetchData(); 
-}} />
+            <TabAjustes
+              userProfile={userProfile} categories={categories}
+              expenses={expenses} currentDate={currentDate}
+              isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode}
+              fetchData={fetchData} showToast={showToast}
+              onOpenLogs={() => setActiveTab('logs')}
+              onSignOut={signOut} onAddCategory={addCategory}
+              onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory}
+            />
           )}
 
-          {activeTab === 'logs' && <TabLogs logs={logs} onBack={() => setActiveTab('config')} />}
+          {activeTab === 'logs' && (
+            <TabLogs logs={logs} onBack={() => setActiveTab('config')} />
+          )}
 
+          {/* ✅ Filmes & Séries */}
           {activeTab === 'movies' && (
-            <TabFilmes watchlistCategories={watchlistCategories} watchlistItems={watchlistItems} tmdbApiKey={import.meta.env.VITE_TMDB_KEY as string} fetchData={fetchData} showToast={showToast} onAddCategory={addWatchlistCategory} onDeleteCategory={deleteWatchlistCategory} onAddItem={addWatchlistItem} onChangeStatus={changeWatchlistStatus} onDeleteItem={deleteWatchlistItem} />
+            <TabFilmes
+              watchlistCategories={watchlistCategories}
+              watchlistItems={watchlistItems}
+              tmdbApiKey={import.meta.env.VITE_TMDB_KEY as string}
+              fetchData={fetchData}
+              showToast={showToast}
+              onAddCategory={addWatchlistCategory}
+              onDeleteCategory={deleteWatchlistCategory}
+              onAddItem={addWatchlistItem}
+              onChangeStatus={changeWatchlistStatus}
+              onDeleteItem={deleteWatchlistItem}
+            />
           )}
 
+          {/* ✅ Receitas */}
+          {activeTab === 'recipes' && (
+            <TabReceitas
+              fetchData={fetchData}
+              showToast={showToast}
+              onAddShoppingItems={addShoppingItemsBulk}
+            />
+          )}
+
+          {/* ✅ Sonhos */}
+          {activeTab === 'dreams' && (
+            <TabSonhos
+              dreams={dreams}
+              expenses={expenses}
+              fetchData={fetchData}
+              showToast={showToast}
+              userId={user?.id ?? ''}
+              onAddDream={addDream}
+              onUpdateDream={updateDream}
+              onCompleteDream={completeDream}
+              onQuickSave={quickSaveDream}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
 
+      {/* Modal comprovante */}
       <AnimatePresence>
         {viewingReceipt && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/95 z-[200] flex flex-col p-4 backdrop-blur-xl">
-            <button onClick={() => setViewingReceipt(null)} className="self-end p-4 text-white"><X size={32} /></button>
-            <div className="flex-1 flex items-center justify-center"><img src={viewingReceipt} className="max-w-full max-h-[85vh] rounded-3xl object-contain border border-white/10 shadow-2xl" alt="Recibo" /></div>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/95 z-[200] flex flex-col p-4 backdrop-blur-xl"
+            role="dialog" aria-modal="true" aria-label="Visualizar comprovante"
+          >
+            <button onClick={() => setViewingReceipt(null)} aria-label="Fechar comprovante" className="self-end p-4 text-white">
+              <X size={32} />
+            </button>
+            <div className="flex-1 flex items-center justify-center">
+              <img
+                src={viewingReceipt}
+                className="max-w-full max-h-[85vh] rounded-3xl object-contain border border-white/10 shadow-2xl"
+                alt="Comprovante da despesa"
+              />
+            </div>
+            <p className="text-center text-white/50 text-[10px] font-black uppercase tracking-[0.4em] mt-6">
+              DOCUMENTO SALVO NO SUPABASE
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
