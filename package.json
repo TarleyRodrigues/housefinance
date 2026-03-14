@@ -5,14 +5,14 @@
   "type": "module",
   "homepage": "https://TarleyRodrigues.github.io/housefinance/",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
-    "preview": "npm run build && wrangler dev",
-    "predeploy": "npm run build",
-    "deploy": "npm run build && wrangler deploy",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
-  },
+  "dev": "vite --port=3000 --host=0.0.0.0",
+  "build": "vite build",
+  "preview": "vite preview",
+  "deploy": "npm run build && gh-pages -d dist",
+  "deploy:proxy": "wrangler deploy",
+  "clean": "rm -rf dist",
+  "lint": "tsc --noEmit"
+},
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@google/generative-ai": "^0.24.1",
