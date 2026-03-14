@@ -37,7 +37,8 @@ export interface Category {
   name: string;
   monthly_goal?: number;
   color?: string;
-  is_active: boolean;       
+  is_active: boolean;
+  type?: 'couple' | 'individual';       
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

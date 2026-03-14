@@ -146,13 +146,14 @@ export default function Dashboard() {
     if (error) throw error;
   }, []);
 
-  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color }: {
-    id: string; name?: string; oldName?: string; monthly_goal?: number; color?: string;
-  }) => {
-    const updates: Record<string, unknown> = {};
-    if (name !== undefined)         updates.name         = name;
-    if (monthly_goal !== undefined) updates.monthly_goal = monthly_goal;
-    if (color !== undefined)        updates.color        = color;
+  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color, type }: {
+  id: string; name?: string; oldName?: string; monthly_goal?: number; color?: string; type?: string;
+}) => {
+  const updates: Record<string, unknown> = {};
+  if (name !== undefined)         updates.name         = name;
+  if (monthly_goal !== undefined) updates.monthly_goal = monthly_goal;
+  if (color !== undefined)        updates.color        = color;
+  if (type !== undefined)         updates.type         = type;
     const { error } = await supabase.from('categories').update(updates).eq('id', id);
     if (error) throw error;
     if (name && oldName && name !== oldName) {

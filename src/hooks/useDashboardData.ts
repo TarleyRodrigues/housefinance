@@ -1,8 +1,6 @@
 // ─── HOOK PRINCIPAL DE DADOS ─────────────────────────────────────────────────
-// ✅ recipes lazy — busca steps + ingredients + profile
-// ✅ CORREÇÃO: recipes só é atualizado quando activeTab === 'recipes'
-//    (era o motivo de não aparecer: o estado ficava vazio pois o fetch
-//     só rodava na aba certa mas o componente tentava exibir antes)
+// ✅ categories select inclui 'type' (couple | individual)
+// ✅ fetchRecipes independente para evitar stale closure
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
@@ -62,21 +60,12 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     return { startM, endM, startPrev, endPrev, startY, endY };
   }, [currentDate]);
 
-  // ✅ fetchRecipes — função independente, pode ser chamada a qualquer momento
-  // Separada do fetchData para evitar problema de closure stale com activeTab
   const fetchRecipes = useCallback(async () => {
     const { data: rData, error: rErr } = await supabase
       .from('recipes')
       .select(`
-        id,
-        user_id,
-        title,
-        category,
-        prep_time,
-        image_url,
-        instructions,
-        steps,
-        created_at,
+        id, user_id, title, category, prep_time, image_url,
+        instructions, steps, created_at,
         profiles(full_name, avatar_url),
         recipe_ingredients(id, recipe_id, name, quantity, order_index)
       `)
@@ -85,22 +74,24 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
     const normalized = (rData ?? []).map((r: Record<string, unknown>) => ({
       ...r,
-      profile:     Array.isArray(r.profiles) ? (r.profiles[0] ?? undefined) : r.profiles,
-      ingredients: (r.recipe_ingredients ?? []) as Recipe['ingredients'],
-      steps:       Array.isArray(r.steps) ? r.steps : [],
-      profiles:            undefined,
-      recipe_ingredients:  undefined,
+      profile:            Array.isArray(r.profiles) ? (r.profiles[0] ?? undefined) : r.profiles,
+      ingredients:        (r.recipe_ingredients ?? []) as Recipe['ingredients'],
+      steps:              Array.isArray(r.steps) ? r.steps : [],
+      profiles:           undefined,
+      recipe_ingredients: undefined,
     }));
     setRecipes(normalized as unknown as Recipe[]);
-  }, []); // sem dependências — acessa supabase diretamente
+  }, []);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Categorias
+      // 1. Categorias — ✅ inclui 'type' para separação casal/individual
       const { data: cats, error: catsErr } = await supabase
-        .from('categories').select('id, name, monthly_goal, color').order('name');
+        .from('categories')
+        .select('id, name, monthly_goal, color, type')
+        .order('name');
       if (catsErr) throw catsErr;
       if (cats) setCategories(cats as Category[]);
 
@@ -153,16 +144,14 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
       // 7. Lazy por aba
       if (activeTab === 'notes') {
-        const { data: n, error: notesErr } = await supabase
-          .from('notes').select('*').order('created_at', { ascending: false });
+        const { data: n, error: notesErr } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
         if (notesErr) throw notesErr;
         setNotes((n ?? []) as Note[]);
       }
 
       if (activeTab === 'reminders') {
         const { data: r, error: remErr } = await supabase
-          .from('reminders')
-          .select('*, profiles(full_name, avatar_url)')
+          .from('reminders').select('*, profiles(full_name, avatar_url)')
           .gte('reminder_date', dates.startM.split('T')[0])
           .lte('reminder_date', dates.endM.split('T')[0])
           .order('reminder_date', { ascending: true });
@@ -172,10 +161,8 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
       if (activeTab === 'shopping') {
         const { data: s, error: shopErr } = await supabase
-          .from('shopping_list')
-          .select('*, profiles(full_name, avatar_url)')
-          .order('is_pending', { ascending: false })
-          .order('created_at', { ascending: false });
+          .from('shopping_list').select('*, profiles(full_name, avatar_url)')
+          .order('is_pending', { ascending: false }).order('created_at', { ascending: false });
         if (shopErr) throw shopErr;
         setShoppingList(normalizeProfiles((s ?? []) as unknown as ShoppingItem[]));
       }
@@ -200,8 +187,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setWatchlistItems((wItems ?? []) as WatchlistItem[]);
 
         const { data: wRatings, error: wRatingsErr } = await supabase
-          .from('watchlist_ratings')
-          .select('id, item_id, user_id, rating, profiles(full_name, avatar_url)');
+          .from('watchlist_ratings').select('id, item_id, user_id, rating, profiles(full_name, avatar_url)');
         if (wRatingsErr) throw wRatingsErr;
         const normalized = normalizeProfiles(
           (wRatings ?? []) as unknown as (WatchlistRating & { profiles?: unknown })[]
@@ -209,7 +195,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setWatchlistRatings(normalized);
       }
 
-      // ✅ Receitas — inclui steps (jsonb), ingredients e profile de quem cadastrou
       if (activeTab === 'recipes') {
         await fetchRecipes();
       }
@@ -221,7 +206,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [dates, activeTab, user]);
+  }, [dates, activeTab, user, fetchRecipes]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
