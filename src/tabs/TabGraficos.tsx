@@ -391,7 +391,7 @@ export function TabGraficos({
             </div>
             {chartDataCouple.length > 0 && (
               <div className="mt-3 space-y-2">
-                {chartDataCouple.sort((a, b) => b.value - a.value).map((d) => (
+                {[...chartDataCouple].sort((a, b) => b.value - a.value).map((d) => (
                   <div key={d.name} className="flex items-center gap-3">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
                     <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex-1 truncate">{d.name}</span>
@@ -429,7 +429,7 @@ export function TabGraficos({
               )}
             </div>
             <div className="mt-3 space-y-2">
-              {userTotals.sort((a, b) => b.value - a.value).map((item, i) => (
+              {[...userTotals].sort((a, b) => b.value - a.value).map((item, i) => (
                 <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700">
                   <img src={item.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}`}
                     className="w-8 h-8 rounded-full object-cover border-2 border-white dark:border-slate-700" alt={`Foto de ${item.name}`} />
@@ -589,7 +589,7 @@ export function TabGraficos({
               {/* Resumo por categoria (pills) */}
               {person.categories.length > 0 && (
                 <div className="px-5 pb-3 flex flex-wrap gap-2">
-                  {person.categories.sort((a, b) => b.value - a.value).map((cat) => (
+                  {[...person.categories].sort((a, b) => b.value - a.value).map((cat) => (
                     <div key={cat.name}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wide"
                       style={{ backgroundColor: cat.color + '18', color: cat.color }}
