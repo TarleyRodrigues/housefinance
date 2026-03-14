@@ -1,9 +1,10 @@
 // ─── HOOK PRINCIPAL DE DADOS ─────────────────────────────────────────────────
 // ✅ fetchData estabilizado com useCallback
 // ✅ categories busca color — select explícito
-// ✅ normalizeProfiles — Supabase retorna profiles como array, normalizamos para objeto
+// ✅ normalizeProfiles — Supabase retorna profiles como array, normaliza para objeto
 // ✅ logs lazy — só na aba 'logs'
 // ✅ watchlist lazy — só na aba 'movies'
+// ✅ watchlist_ratings incluído com join em profiles
 // ✅ Tratamento de erro exposto
 // ✅ Busca de sonhos (dreams) integrada
 
@@ -13,27 +14,19 @@ import { useAuth } from '../AuthContext';
 import { startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
-  WatchlistCategory, WatchlistItem, Dream // Adicionado Dream nas importações
+  WatchlistCategory, WatchlistItem, Dream,
 } from '../types';
+import type { WatchlistRating } from '../tabs/Tabfilmes';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tipos locais
-// ─────────────────────────────────────────────────────────────────────────────
 export interface Log {
   id: string;
   created_at: string;
   action: string;
   details?: string;
   user_id: string;
-  profiles?: {
-    full_name?: string;
-    avatar_url?: string;
-  };
+  profiles?: { full_name?: string; avatar_url?: string };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: Supabase retorna `profiles` como array em joins — normaliza para objeto
-// ─────────────────────────────────────────────────────────────────────────────
 function normalizeProfiles<T extends { profiles?: unknown }>(rows: T[]): T[] {
   return rows.map((row) => ({
     ...row,
@@ -41,29 +34,26 @@ function normalizeProfiles<T extends { profiles?: unknown }>(rows: T[]): T[] {
   }));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HOOK
-// ─────────────────────────────────────────────────────────────────────────────
 export function useDashboardData(currentDate: Date, activeTab: string) {
   const { user } = useAuth();
 
-  const [expenses, setExpenses]                     = useState<Expense[]>([]);
-  const [prevMonthExpenses, setPrevMonthExpenses]   = useState<Expense[]>([]);
-  const [prevMonthTotal, setPrevMonthTotal]          = useState(0);
-  const [categories, setCategories]                 = useState<Category[]>([]);
-  const [shoppingList, setShoppingList]             = useState<ShoppingItem[]>([]);
-  const [reminders, setReminders]                   = useState<Reminder[]>([]);
-  const [notes, setNotes]                           = useState<Note[]>([]);
-  const [logs, setLogs]                             = useState<Log[]>([]);
-  const [annualChartData, setAnnualChartData]       = useState<{ name: string; total: number }[]>([]);
-  const [userProfile, setUserProfile]               = useState<Profile | null>(null);
+  const [expenses, setExpenses]                       = useState<Expense[]>([]);
+  const [prevMonthExpenses, setPrevMonthExpenses]     = useState<Expense[]>([]);
+  const [prevMonthTotal, setPrevMonthTotal]           = useState(0);
+  const [categories, setCategories]                   = useState<Category[]>([]);
+  const [shoppingList, setShoppingList]               = useState<ShoppingItem[]>([]);
+  const [reminders, setReminders]                     = useState<Reminder[]>([]);
+  const [notes, setNotes]                             = useState<Note[]>([]);
+  const [logs, setLogs]                               = useState<Log[]>([]);
+  const [annualChartData, setAnnualChartData]         = useState<{ name: string; total: number }[]>([]);
+  const [userProfile, setUserProfile]                 = useState<Profile | null>(null);
   const [watchlistCategories, setWatchlistCategories] = useState<WatchlistCategory[]>([]);
-  const [watchlistItems, setWatchlistItems]         = useState<WatchlistItem[]>([]);
-  const [dreams, setDreams]                         = useState<Dream[]>([]); // Estado para os sonhos
-  const [isLoading, setIsLoading]                   = useState(true);
-  const [error, setError]                           = useState<string | null>(null);
+  const [watchlistItems, setWatchlistItems]           = useState<WatchlistItem[]>([]);
+  const [watchlistRatings, setWatchlistRatings]       = useState<WatchlistRating[]>([]);
+  const [dreams, setDreams]                           = useState<Dream[]>([]);
+  const [isLoading, setIsLoading]                     = useState(true);
+  const [error, setError]                             = useState<string | null>(null);
 
-  // ── Datas pré-calculadas ───────────────────────────────────────────────────
   const dates = useMemo(() => {
     const startM    = startOfMonth(currentDate).toISOString();
     const endM      = endOfMonth(currentDate).toISOString();
@@ -74,32 +64,25 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     return { startM, endM, startPrev, endPrev, startY, endY };
   }, [currentDate]);
 
-  // ── fetchData ──────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
     try {
       // 1. Categorias de gastos
       const { data: cats, error: catsErr } = await supabase
-        .from('categories')
-        .select('id, name, monthly_goal, color')
-        .order('name');
+        .from('categories').select('id, name, monthly_goal, color').order('name');
       if (catsErr) throw catsErr;
       if (cats) setCategories(cats as Category[]);
 
       // 2. Perfil do usuário
       if (user) {
         const { data: profile, error: profileErr } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .eq('id', user.id)
-          .single();
+          .from('profiles').select('id, full_name, avatar_url').eq('id', user.id).single();
         if (profileErr && profileErr.code !== 'PGRST116') throw profileErr;
         if (profile) setUserProfile(profile as Profile);
       }
 
-      // 3. Gastos do mês anterior
+      // 3. Gastos mês anterior
       const { data: prevExps, error: prevErr } = await supabase
         .from('expenses')
         .select('id, amount, category_name, user_id, created_at, is_deleted, profiles(full_name, avatar_url)')
@@ -111,7 +94,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       setPrevMonthExpenses(pExps);
       setPrevMonthTotal(pExps.reduce((acc, e) => acc + Number(e.amount), 0));
 
-      // 4. Gastos do mês atual
+      // 4. Gastos mês atual
       const { data: exps, error: expsErr } = await supabase
         .from('expenses')
         .select('*, profiles(full_name, avatar_url)')
@@ -124,38 +107,25 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
       // 5. Gráfico anual
       const { data: ann, error: annErr } = await supabase
-        .from('expenses')
-        .select('amount, created_at')
+        .from('expenses').select('amount, created_at')
         .eq('is_deleted', false)
-        .gte('created_at', dates.startY)
-        .lte('created_at', dates.endY);
+        .gte('created_at', dates.startY).lte('created_at', dates.endY);
       if (annErr) throw annErr;
-
       const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-      setAnnualChartData(
-        months.map((m, i) => ({
-          name: m,
-          total: (ann ?? [])
-            .filter((e) => new Date(e.created_at).getMonth() === i)
-            .reduce((acc, e) => acc + Number(e.amount), 0),
-        }))
-      );
+      setAnnualChartData(months.map((m, i) => ({
+        name: m,
+        total: (ann ?? []).filter((e) => new Date(e.created_at).getMonth() === i).reduce((acc, e) => acc + Number(e.amount), 0),
+      })));
 
-      // 6. Sonhos (Sempre carrega junto com os dados principais)
+      // 6. Sonhos
       const { data: dData, error: dErr } = await supabase
-        .from('dreams')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from('dreams').select('*').order('created_at', { ascending: false });
       if (dErr) throw dErr;
       setDreams((dData ?? []) as Dream[]);
 
-      // 7. Queries lazy por aba ──────────────────────────────────────────────
-
+      // 7. Queries lazy por aba
       if (activeTab === 'notes') {
-        const { data: n, error: notesErr } = await supabase
-          .from('notes')
-          .select('*')
-          .order('created_at', { ascending: false });
+        const { data: n, error: notesErr } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
         if (notesErr) throw notesErr;
         setNotes((n ?? []) as Note[]);
       }
@@ -183,29 +153,33 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
       if (activeTab === 'logs') {
         const { data: logData, error: logsErr } = await supabase
-          .from('logs')
-          .select('*, profiles(full_name, avatar_url)')
-          .order('created_at', { ascending: false })
-          .limit(100);
+          .from('logs').select('*, profiles(full_name, avatar_url)')
+          .order('created_at', { ascending: false }).limit(100);
         if (logsErr) throw logsErr;
         setLogs(normalizeProfiles((logData ?? []) as unknown as Log[]));
       }
 
-      // ✅ Watchlist lazy: só busca na aba 'movies'
+      // ✅ Watchlist lazy — busca itens + categorias + ratings com profiles
       if (activeTab === 'movies') {
         const { data: wCats, error: wCatsErr } = await supabase
-          .from('watchlist_categories')
-          .select('*')
-          .order('created_at', { ascending: true });
+          .from('watchlist_categories').select('*').order('created_at', { ascending: true });
         if (wCatsErr) throw wCatsErr;
         setWatchlistCategories((wCats ?? []) as WatchlistCategory[]);
 
         const { data: wItems, error: wItemsErr } = await supabase
-          .from('watchlist_items')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .from('watchlist_items').select('*').order('created_at', { ascending: false });
         if (wItemsErr) throw wItemsErr;
         setWatchlistItems((wItems ?? []) as WatchlistItem[]);
+
+        // ✅ Ratings com join em profiles para mostrar foto + nome
+        const { data: wRatings, error: wRatingsErr } = await supabase
+          .from('watchlist_ratings')
+          .select('id, item_id, user_id, rating, profiles(full_name, avatar_url)');
+        if (wRatingsErr) throw wRatingsErr;
+        const normalized = normalizeProfiles(
+          (wRatings ?? []) as unknown as (WatchlistRating & { profiles?: unknown })[]
+        ) as unknown as WatchlistRating[];
+        setWatchlistRatings(normalized);
       }
 
     } catch (e) {
@@ -217,26 +191,13 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     }
   }, [dates, activeTab, user]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   return {
-    expenses,
-    prevMonthExpenses,
-    prevMonthTotal,
-    categories,
-    shoppingList,
-    reminders,
-    notes,
-    logs,
-    annualChartData,
-    userProfile,
-    watchlistCategories,
-    watchlistItems,
-    dreams, // Retornando o estado dos sonhos
-    isLoading,
-    error,
-    fetchData,
+    expenses, prevMonthExpenses, prevMonthTotal,
+    categories, shoppingList, reminders, notes, logs,
+    annualChartData, userProfile,
+    watchlistCategories, watchlistItems, watchlistRatings,
+    dreams, isLoading, error, fetchData,
   };
 }
