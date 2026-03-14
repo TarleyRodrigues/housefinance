@@ -1,12 +1,8 @@
 // ─── HOOK PRINCIPAL DE DADOS ─────────────────────────────────────────────────
-// ✅ fetchData estabilizado com useCallback
-// ✅ categories busca color — select explícito
-// ✅ normalizeProfiles — Supabase retorna profiles como array, normaliza para objeto
-// ✅ logs lazy — só na aba 'logs'
-// ✅ watchlist lazy — só na aba 'movies'
-// ✅ watchlist_ratings incluído com join em profiles
-// ✅ Tratamento de erro exposto
-// ✅ Busca de sonhos (dreams) integrada
+// ✅ recipes lazy — busca steps + ingredients + profile
+// ✅ CORREÇÃO: recipes só é atualizado quando activeTab === 'recipes'
+//    (era o motivo de não aparecer: o estado ficava vazio pois o fetch
+//     só rodava na aba certa mas o componente tentava exibir antes)
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
@@ -17,6 +13,7 @@ import type {
   WatchlistCategory, WatchlistItem, Dream,
 } from '../types';
 import type { WatchlistRating } from '../tabs/Tabfilmes';
+import type { Recipe } from '../tabs/TabReceitas';
 
 export interface Log {
   id: string;
@@ -50,6 +47,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [watchlistCategories, setWatchlistCategories] = useState<WatchlistCategory[]>([]);
   const [watchlistItems, setWatchlistItems]           = useState<WatchlistItem[]>([]);
   const [watchlistRatings, setWatchlistRatings]       = useState<WatchlistRating[]>([]);
+  const [recipes, setRecipes]                         = useState<Recipe[]>([]);
   const [dreams, setDreams]                           = useState<Dream[]>([]);
   const [isLoading, setIsLoading]                     = useState(true);
   const [error, setError]                             = useState<string | null>(null);
@@ -64,17 +62,49 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     return { startM, endM, startPrev, endPrev, startY, endY };
   }, [currentDate]);
 
+  // ✅ fetchRecipes — função independente, pode ser chamada a qualquer momento
+  // Separada do fetchData para evitar problema de closure stale com activeTab
+  const fetchRecipes = useCallback(async () => {
+    const { data: rData, error: rErr } = await supabase
+      .from('recipes')
+      .select(`
+        id,
+        user_id,
+        title,
+        category,
+        prep_time,
+        image_url,
+        instructions,
+        steps,
+        created_at,
+        profiles(full_name, avatar_url),
+        recipe_ingredients(id, recipe_id, name, quantity, order_index)
+      `)
+      .order('created_at', { ascending: false });
+    if (rErr) throw rErr;
+
+    const normalized = (rData ?? []).map((r: Record<string, unknown>) => ({
+      ...r,
+      profile:     Array.isArray(r.profiles) ? (r.profiles[0] ?? undefined) : r.profiles,
+      ingredients: (r.recipe_ingredients ?? []) as Recipe['ingredients'],
+      steps:       Array.isArray(r.steps) ? r.steps : [],
+      profiles:            undefined,
+      recipe_ingredients:  undefined,
+    }));
+    setRecipes(normalized as unknown as Recipe[]);
+  }, []); // sem dependências — acessa supabase diretamente
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Categorias de gastos
+      // 1. Categorias
       const { data: cats, error: catsErr } = await supabase
         .from('categories').select('id, name, monthly_goal, color').order('name');
       if (catsErr) throw catsErr;
       if (cats) setCategories(cats as Category[]);
 
-      // 2. Perfil do usuário
+      // 2. Perfil
       if (user) {
         const { data: profile, error: profileErr } = await supabase
           .from('profiles').select('id, full_name, avatar_url').eq('id', user.id).single();
@@ -87,8 +117,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         .from('expenses')
         .select('id, amount, category_name, user_id, created_at, is_deleted, profiles(full_name, avatar_url)')
         .eq('is_deleted', false)
-        .gte('created_at', dates.startPrev)
-        .lte('created_at', dates.endPrev);
+        .gte('created_at', dates.startPrev).lte('created_at', dates.endPrev);
       if (prevErr) throw prevErr;
       const pExps = normalizeProfiles((prevExps ?? []) as unknown as Expense[]);
       setPrevMonthExpenses(pExps);
@@ -99,8 +128,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         .from('expenses')
         .select('*, profiles(full_name, avatar_url)')
         .eq('is_deleted', false)
-        .gte('created_at', dates.startM)
-        .lte('created_at', dates.endM)
+        .gte('created_at', dates.startM).lte('created_at', dates.endM)
         .order('created_at', { ascending: false });
       if (expsErr) throw expsErr;
       setExpenses(normalizeProfiles((exps ?? []) as unknown as Expense[]));
@@ -123,9 +151,10 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       if (dErr) throw dErr;
       setDreams((dData ?? []) as Dream[]);
 
-      // 7. Queries lazy por aba
+      // 7. Lazy por aba
       if (activeTab === 'notes') {
-        const { data: n, error: notesErr } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+        const { data: n, error: notesErr } = await supabase
+          .from('notes').select('*').order('created_at', { ascending: false });
         if (notesErr) throw notesErr;
         setNotes((n ?? []) as Note[]);
       }
@@ -159,7 +188,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         setLogs(normalizeProfiles((logData ?? []) as unknown as Log[]));
       }
 
-      // ✅ Watchlist lazy — busca itens + categorias + ratings com profiles
       if (activeTab === 'movies') {
         const { data: wCats, error: wCatsErr } = await supabase
           .from('watchlist_categories').select('*').order('created_at', { ascending: true });
@@ -171,7 +199,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         if (wItemsErr) throw wItemsErr;
         setWatchlistItems((wItems ?? []) as WatchlistItem[]);
 
-        // ✅ Ratings com join em profiles para mostrar foto + nome
         const { data: wRatings, error: wRatingsErr } = await supabase
           .from('watchlist_ratings')
           .select('id, item_id, user_id, rating, profiles(full_name, avatar_url)');
@@ -180,6 +207,11 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
           (wRatings ?? []) as unknown as (WatchlistRating & { profiles?: unknown })[]
         ) as unknown as WatchlistRating[];
         setWatchlistRatings(normalized);
+      }
+
+      // ✅ Receitas — inclui steps (jsonb), ingredients e profile de quem cadastrou
+      if (activeTab === 'recipes') {
+        await fetchRecipes();
       }
 
     } catch (e) {
@@ -198,6 +230,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     categories, shoppingList, reminders, notes, logs,
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings,
-    dreams, isLoading, error, fetchData,
+    recipes, dreams, isLoading, error, fetchData, fetchRecipes,
   };
 }
