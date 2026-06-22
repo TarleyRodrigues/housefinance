@@ -42,7 +42,7 @@ export function TabLogs({ logs, onBack }: { logs: any[], onBack: () => void }) {
                 {isDelete && <Trash2 size={14} strokeWidth={4} />}
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex-1">
+              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm p-4 rounded-3xl border border-white/80 dark:border-slate-700/50 shadow-[0_2px_20px_rgba(0,0,0,0.06)] dark:shadow-slate-900/30 flex-1">
                 <div className="flex justify-between items-start mb-1">
                   <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">
                     {log.profiles?.full_name?.split(' ')[0]}

@@ -14,6 +14,15 @@ export const handleCurrencyInput = (value: string): string => {
 export const parseAmount = (value: string): number =>
   parseFloat(value.replace(/\./g, '').replace(',', '.'));
 
+// Adiciona N meses a uma data 'YYYY-MM-DD', respeitando o último dia do mês
+export const addMonths = (dateStr: string, n: number): string => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const lastDay = new Date(y, m - 1 + n + 1, 0).getDate();
+  const day = Math.min(d, lastDay);
+  const result = new Date(y, m - 1 + n, day);
+  return `${result.getFullYear()}-${String(result.getMonth() + 1).padStart(2, '0')}-${String(result.getDate()).padStart(2, '0')}`;
+};
+
 export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 export const USER_COLORS  = ['#3b82f6', '#ec4899'];
 

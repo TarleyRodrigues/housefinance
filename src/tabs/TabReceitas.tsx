@@ -696,7 +696,9 @@ export function TabReceitas({
       </AnimatePresence>
 
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-orange-600 via-orange-500 to-amber-400 p-5 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-orange-600 via-orange-500 to-amber-400 p-5 rounded-[2.5rem] text-white shadow-2xl shadow-orange-500/30 relative overflow-hidden">
+        <div className="absolute -right-10 -top-10 w-44 h-44 bg-white/8 rounded-full pointer-events-none" />
+        <div className="absolute -left-6 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-1">
             <ChefHat size={14} className="opacity-70" />

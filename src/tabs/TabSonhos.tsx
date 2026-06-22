@@ -12,7 +12,7 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Plus, Target, CheckCircle2, X, Loader2, Pencil,
+  Plus, Target, CheckCircle2, X, Loader2, Pencil, Trash2,
   TrendingUp, Trophy, ChevronDown, ChevronUp,
   AlertTriangle, Sparkles, ImagePlus, Camera,
 } from 'lucide-react';
@@ -298,7 +298,7 @@ function DreamFormModal({
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[400] flex items-end justify-center p-4"
       onClick={onCancel} role="dialog" aria-modal="true"
-      aria-label={isEdit ? 'Editar sonho' : 'Criar novo sonho'}
+      aria-label={isEdit ? 'Editar objetivo' : 'Criar novo objetivo'}
     >
       <motion.div
         initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
@@ -314,7 +314,7 @@ function DreamFormModal({
               {isEdit ? 'Editando' : 'Novo'}
             </p>
             <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight text-lg leading-none">
-              {isEdit ? (dream?.title ?? 'Sonho') : 'Criar Sonho'}
+              {isEdit ? (dream?.title ?? 'Objetivo') : 'Criar Objetivo'}
             </h3>
           </div>
           <button onClick={onCancel} aria-label="Fechar" className="p-2 text-slate-400 active:scale-90 transition-all">
@@ -331,7 +331,7 @@ function DreamFormModal({
         {/* Nome */}
         <div>
           <label htmlFor={`${mode}-title`} className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">
-            Nome do sonho
+            Nome do objetivo
           </label>
           <input
             id={`${mode}-title`}
@@ -389,7 +389,7 @@ function DreamFormModal({
           ) : isEdit ? (
             <><Sparkles size={16} /> Salvar Alterações</>
           ) : (
-            <><Sparkles size={16} /> Projetar Sonho</>
+            <><Sparkles size={16} /> Projetar Objetivo</>
           )}
         </button>
       </motion.div>
@@ -409,6 +409,7 @@ interface Props {
   onAddDream: (title: string, target: number, image: string) => Promise<void>;
   onUpdateDream: (id: string, updates: { title?: string; target_value?: number; image_url?: string }) => Promise<void>;
   onCompleteDream: (dreamId: string, categoryId: string) => Promise<void>;
+  onDeleteDream: (id: string) => Promise<void>;
   onQuickSave: (categoryName: string, amount: number) => Promise<void>;
 }
 
@@ -417,7 +418,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabSonhos({
   dreams, expenses, fetchData, showToast,
-  userId, onAddDream, onUpdateDream, onCompleteDream, onQuickSave,
+  userId, onAddDream, onUpdateDream, onCompleteDream, onDeleteDream, onQuickSave,
 }: Props) {
 
   const [showAdd, setShowAdd]             = useState(false);
@@ -425,6 +426,7 @@ export function TabSonhos({
   const [savingDream, setSavingDream]         = useState<DreamWithProgress | null>(null);
   const [editingDream, setEditingDream]       = useState<DreamWithProgress | null>(null);
   const [confirmComplete, setConfirmComplete] = useState<DreamWithProgress | null>(null);
+  const [confirmDelete, setConfirmDelete]     = useState<DreamWithProgress | null>(null);
 
   // ── Progresso calculado ───────────────────────────────────────────────────
   const dreamsWithProgress = useMemo((): DreamWithProgress[] => {
@@ -446,7 +448,7 @@ export function TabSonhos({
   const handleAdd = useCallback(async (data: { title: string; target: number; imageUrl: string }) => {
     try {
       await onAddDream(data.title, data.target, data.imageUrl);
-      showToast(`Sonho "${data.title}" criado! 🌟`);
+      showToast(`Objetivo "${data.title}" criado!`);
       setShowAdd(false);
     } catch {
       showToast('Erro ao criar sonho', 'error');
@@ -465,7 +467,7 @@ export function TabSonhos({
 
     try {
       await onUpdateDream(editingDream.id, updates);
-      showToast('Sonho atualizado! ✨');
+      showToast('Objetivo atualizado!');
       setEditingDream(null);
     } catch {
       showToast('Erro ao atualizar', 'error');
@@ -497,6 +499,18 @@ export function TabSonhos({
     }
   }, [confirmComplete, onCompleteDream, showToast]);
 
+  const handleDelete = useCallback(async () => {
+    if (!confirmDelete) return;
+    try {
+      await onDeleteDream(confirmDelete.id);
+      showToast(`"${confirmDelete.title}" excluído`);
+    } catch {
+      showToast('Erro ao excluir', 'error');
+    } finally {
+      setConfirmDelete(null);
+    }
+  }, [confirmDelete, onDeleteDream, showToast]);
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 pb-10">
@@ -508,12 +522,12 @@ export function TabSonhos({
             {activeDreams.length} ativo{activeDreams.length !== 1 ? 's' : ''} · {completedDreams.length} conquistado{completedDreams.length !== 1 ? 's' : ''}
           </p>
           <h2 className="text-2xl font-black uppercase tracking-tighter dark:text-white leading-none">
-            Nossas Conquistas
+            Nossos Objetivos
           </h2>
         </div>
         <button
           onClick={() => setShowAdd(true)}
-          aria-label="Criar novo sonho"
+          aria-label="Criar novo objetivo"
           className="p-3.5 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/30 active:scale-90 transition-all"
         >
           <Plus size={22} />
@@ -529,13 +543,13 @@ export function TabSonhos({
             <Sparkles size={36} className="text-blue-400" />
           </div>
           <div className="text-center space-y-1">
-            <p className="font-black text-slate-800 dark:text-white uppercase tracking-tight">Qual é o próximo sonho?</p>
+            <p className="font-black text-slate-800 dark:text-white uppercase tracking-tight">Qual é o próximo objetivo?</p>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Crie o primeiro e comece a poupar</p>
           </div>
           <button onClick={() => setShowAdd(true)}
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-black text-xs uppercase rounded-2xl shadow-lg shadow-blue-500/30 active:scale-95 transition-all"
           >
-            <Plus size={14} /> Criar Sonho
+            <Plus size={14} /> Criar Objetivo
           </button>
         </motion.div>
       )}
@@ -552,7 +566,7 @@ export function TabSonhos({
               {/* Imagem */}
               <div className="h-44 bg-slate-100 dark:bg-slate-900 relative overflow-hidden">
                 {dream.image_url ? (
-                  <img src={dream.image_url} className="w-full h-full object-cover" alt={`Sonho: ${dream.title}`} />
+                  <img src={dream.image_url} className="w-full h-full object-cover" alt={`Objetivo: ${dream.title}`} loading="lazy" decoding="async" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Target size={52} className="text-slate-200 dark:text-slate-700" />
@@ -567,14 +581,23 @@ export function TabSonhos({
                   {dream.percent.toFixed(0)}%
                 </div>
 
-                {/* Botão editar */}
-                <button
-                  onClick={() => setEditingDream(dream)}
-                  aria-label={`Editar sonho ${dream.title}`}
-                  className="absolute top-3 left-3 w-9 h-9 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all"
-                >
-                  <Pencil size={14} />
-                </button>
+                {/* Botões editar / excluir */}
+                <div className="absolute top-3 left-3 flex gap-1.5">
+                  <button
+                    onClick={() => setEditingDream(dream)}
+                    aria-label={`Editar objetivo ${dream.title}`}
+                    className="w-9 h-9 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white/70 hover:text-white active:scale-90 transition-all"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(dream)}
+                    aria-label={`Excluir objetivo ${dream.title}`}
+                    className="w-9 h-9 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white/70 hover:text-red-400 active:scale-90 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
 
                 <div className="absolute bottom-4 left-5 right-5">
                   <h3 className="text-xl font-black text-white uppercase leading-tight tracking-tight">{dream.title}</h3>
@@ -705,6 +728,17 @@ export function TabSonhos({
             description={`"${confirmComplete.title}" será movido para conquistas e a categoria será inativada.`}
             confirmLabel="Conquistei! 🏆" confirmClass="bg-emerald-500"
             onConfirm={handleComplete} onCancel={() => setConfirmComplete(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmDelete && (
+          <ConfirmModal
+            isOpen title="Excluir objetivo?"
+            description={`"${confirmDelete.title}" será excluído permanentemente. Essa ação não pode ser desfeita.`}
+            confirmLabel="Excluir" confirmClass="bg-red-500"
+            onConfirm={handleDelete} onCancel={() => setConfirmDelete(null)}
           />
         )}
       </AnimatePresence>

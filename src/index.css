@@ -23,3 +23,51 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ── TEMA BRASIL — Copa do Mundo 2026 ─────────────────────────────────────── */
+.dark.brasil {
+  /* Superfícies e fundos */
+  --color-slate-950: #010804;
+  --color-slate-900: #051a0a;
+  --color-slate-800: #0a2e14;
+  --color-slate-700: #0d3d1c;
+  --color-slate-600: #155d2a;
+  --color-slate-50:  #0a2e14;
+
+  /* Texto */
+  --color-slate-100: #f0f9f2;
+  --color-slate-200: #c8e6cc;
+  --color-slate-300: #9dbfa3;
+  --color-slate-400: #d4a843;
+  --color-slate-500: #b08c35;
+
+  /* Branco levemente esverdeado */
+  --color-white: #f4fcf5;
+
+  /* Acento primário: Azul → Dourado Brasil */
+  --color-blue-600: #c9a800;
+  --color-blue-500: #fcca02;
+  --color-blue-400: #ffd700;
+  --color-blue-300: #ffe033;
+  --color-blue-200: #fff0b3;
+  --color-blue-100: #fffde7;
+  --color-blue-50:  #fffff0;
+
+  /* Acento secundário: Violeta → Azul Bandeira */
+  --color-violet-600: #001a52;
+  --color-violet-500: #002776;
+  --color-violet-400: #0040a8;
+  --color-violet-300: #1565c0;
+  --color-violet-200: #90caf9;
+  --color-violet-100: #e3f2fd;
+  --color-violet-50:  #e8f0fe;
+
+  --color-indigo-600: #001a52;
+  --color-indigo-500: #002776;
+  --color-indigo-400: #0040a8;
+}
+
+.dark.brasil body {
+  background-color: #051a0a;
+  color: #f0f9f2;
+}

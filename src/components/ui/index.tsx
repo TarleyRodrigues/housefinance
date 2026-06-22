@@ -22,7 +22,7 @@ export const Toast = ({ message, type }: { message: string; type: string }) => (
 
 // ── Skeleton Card ─────────────────────────────────────────────────────────────
 export const SkeletonCard = () => (
-  <div className="bg-white dark:bg-slate-800 p-4 rounded-3xl border border-slate-100 dark:border-slate-700 animate-pulse flex items-center gap-3">
+  <div className="bg-white/90 dark:bg-slate-800/90 p-4 rounded-3xl border border-white/80 dark:border-slate-700/50 animate-pulse flex items-center gap-3">
     <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-2xl" />
     <div className="flex-1 space-y-2">
       <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/4" />

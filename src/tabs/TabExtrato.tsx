@@ -9,17 +9,18 @@
 // ✅ Modal de confirmação customizado
 // ✅ aria-label em todos os botões (acessibilidade)
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { haptic } from '../utils/haptic';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Edit2, Trash2, Search, Filter, ArrowUpRight, ArrowDownRight,
   Paperclip, Image as ImageIcon, X, AlertTriangle, ArrowUpDown,
-  Clock, CalendarDays,
+  Clock, CalendarDays, Copy, CreditCard,
 } from 'lucide-react';
 import { SkeletonCard } from '../components/ui';
 import { formatCurrency } from '../utils';
 import type { Expense, Category } from '../types';
-import { format, isToday, isYesterday, isSameDay } from 'date-fns';
+import { format, isToday, isYesterday, startOfWeek, endOfWeek, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,18 +35,26 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-// Formata data relativa: "hoje às 14:32", "ontem às 09:15", "12 mar às 20:00"
-function formatRelativeDateTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const timeStr = format(date, 'HH:mm');
-  if (isToday(date))     return `hoje às ${timeStr}`;
-  if (isYesterday(date)) return `ontem às ${timeStr}`;
-  return `${format(date, "d MMM", { locale: ptBR })} às ${timeStr}`;
+// Converte string de data (yyyy-MM-dd ou ISO) para Date local sem problema de UTC
+function parseDateSafe(dateStr: string): Date {
+  if (dateStr.includes('T')) return new Date(dateStr);
+  // date-only: adiciona meio-dia local para evitar problema de midnight UTC
+  return new Date(dateStr + 'T12:00:00');
+}
+
+// Exibe a data do gasto (expense_date) + hora de inserção (created_at)
+// Ex: "hoje às 14:32", "ontem às 09:15", "12 mar às 20:00"
+function formatExpenseDateTime(expense: Expense): string {
+  const expDate = parseDateSafe(expense.expense_date || expense.created_at);
+  const timeStr = format(new Date(expense.created_at), 'HH:mm');
+  if (isToday(expDate))     return `hoje às ${timeStr}`;
+  if (isYesterday(expDate)) return `ontem às ${timeStr}`;
+  return `${format(expDate, "d MMM", { locale: ptBR })} às ${timeStr}`;
 }
 
 // Formata cabeçalho do grupo de dia
 function formatDayHeader(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = parseDateSafe(dateStr);
   if (isToday(date))     return 'Hoje';
   if (isYesterday(date)) return 'Ontem';
   return format(date, "EEEE, d 'de' MMMM", { locale: ptBR });
@@ -54,7 +63,8 @@ function formatDayHeader(dateStr: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos de ordenação
 // ─────────────────────────────────────────────────────────────────────────────
-type SortMode = 'newest' | 'oldest' | 'highest' | 'lowest';
+type SortMode    = 'newest' | 'oldest' | 'highest' | 'lowest';
+type PeriodFilter = 'all' | 'today' | 'week' | '7days' | 'custom';
 
 const SORT_LABELS: Record<SortMode, string> = {
   newest:  'Mais recentes',
@@ -105,7 +115,7 @@ function ConfirmDeleteModal({ expense, onConfirm, onCancel }: {
               className="flex-1 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-black text-xs uppercase tracking-wider active:scale-95 transition-all">
               Cancelar
             </button>
-            <button onClick={onConfirm}
+            <button onClick={() => { haptic('heavy'); onConfirm(); }}
               className="flex-1 py-3 rounded-2xl bg-red-500 text-white font-black text-xs uppercase tracking-wider active:scale-95 transition-all shadow-lg shadow-red-500/30">
               Remover
             </button>
@@ -117,102 +127,156 @@ function ConfirmDeleteModal({ expense, onConfirm, onCancel }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUB: ExpenseCard — com data/hora e cor da categoria
+// SUB: ExpenseCard — swipe-to-reveal com Copy / Edit / Delete
 // ─────────────────────────────────────────────────────────────────────────────
-function ExpenseCard({ expense, categoryColor, onEdit, onDelete, onViewReceipt }: {
+const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, onEdit, onDelete, onDuplicate, onViewReceipt }: {
   expense: Expense;
   categoryColor?: string;
   onEdit: (exp: Expense) => void;
   onDelete: (exp: Expense) => void;
+  onDuplicate: (exp: Expense) => void;
   onViewReceipt: (url: string) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   const avatarUrl =
     expense.profiles?.avatar_url ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(expense.profiles?.full_name ?? 'U')}`;
 
+  // 3 botões × 40px = 120px de revelação
+  const OPEN_X = -120;
+
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      className="bg-white dark:bg-slate-800 p-4 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between transition-all"
+      className="relative overflow-hidden rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-700"
     >
-      <div className="flex items-center gap-3 flex-1 overflow-hidden">
-        <img
-          src={avatarUrl}
-          className="w-12 h-12 rounded-2xl object-cover border-2 border-slate-50 dark:border-slate-700 shadow-sm shrink-0"
-          alt={`Avatar de ${expense.profiles?.full_name ?? 'usuário'}`}
-        />
-        <div className="flex flex-col min-w-0">
-          {/* ✅ Badge de categoria com cor real */}
-          <span
-            className="text-[9px] font-black uppercase tracking-widest leading-none mb-1 px-1.5 py-0.5 rounded-md w-fit"
-            style={
-              categoryColor
-                ? { backgroundColor: categoryColor + '25', color: categoryColor }
-                : undefined
-            }
-          >
+      {/* Acento colorido da categoria */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 z-10 rounded-l-[2rem]"
+        style={{ backgroundColor: categoryColor ?? '#3b82f6' }}
+      />
+
+      {/* Botões revelados (fixos atrás do card) */}
+      <div className="absolute inset-y-0 right-0 flex items-stretch">
+        <button
+          onClick={() => { onDuplicate(expense); setIsOpen(false); }}
+          aria-label={`Duplicar despesa: ${expense.description || 'sem descrição'}`}
+          className="w-10 flex items-center justify-center bg-blue-500 text-white active:opacity-80"
+        >
+          <Copy size={15} />
+        </button>
+        <button
+          onClick={() => { onEdit(expense); setIsOpen(false); }}
+          aria-label={`Editar despesa: ${expense.description || 'sem descrição'}`}
+          className="w-10 flex items-center justify-center bg-indigo-500 text-white active:opacity-80"
+        >
+          <Edit2 size={15} />
+        </button>
+        <button
+          onClick={() => { onDelete(expense); setIsOpen(false); }}
+          aria-label={`Remover despesa: ${expense.description || 'sem descrição'}`}
+          className="w-10 flex items-center justify-center bg-red-500 text-white active:opacity-80"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+
+      {/* Card deslizável */}
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: OPEN_X, right: 0 }}
+        dragElastic={{ left: 0.05, right: 0 }}
+        animate={{ x: isOpen ? OPEN_X : 0 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+        onDragEnd={(_, info) => {
+          setIsOpen(info.offset.x < -50);
+        }}
+        onClick={() => { if (isOpen) setIsOpen(false); }}
+        className="bg-white dark:bg-slate-800 p-4 flex items-center justify-between transition-colors relative"
+        style={{ userSelect: 'none', touchAction: 'pan-y' }}
+      >
+        <div className="flex items-center gap-3 flex-1 overflow-hidden">
+          <img
+            src={avatarUrl}
+            className="w-12 h-12 rounded-2xl object-cover border-2 border-slate-50 dark:border-slate-700 shadow-sm shrink-0"
+            alt={`Avatar de ${expense.profiles?.full_name ?? 'usuário'}`}
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="flex flex-col min-w-0">
             <span
-              className={!categoryColor ? 'text-blue-500' : undefined}
+              className="text-[9px] font-black uppercase tracking-widest leading-none mb-1 px-1.5 py-0.5 rounded-md w-fit"
+              style={
+                categoryColor
+                  ? { backgroundColor: categoryColor + '25', color: categoryColor }
+                  : undefined
+              }
             >
-              {expense.category_name}
+              <span className={!categoryColor ? 'text-blue-500' : undefined}>
+                {expense.category_name}
+              </span>
             </span>
-          </span>
 
-          <span className="font-bold truncate text-sm leading-tight text-slate-800 dark:text-slate-200">
-            {expense.description || 'Sem descrição'}
-          </span>
+            <span className="font-bold truncate text-sm leading-tight text-slate-800 dark:text-slate-200">
+              {expense.description || 'Sem descrição'}
+            </span>
 
-          {/* ✅ Nome + data/hora */}
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
-              {expense.profiles?.full_name?.split(' ')[0]}
-            </span>
-            <span className="text-[8px] text-slate-300 dark:text-slate-600">·</span>
-            <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
-              <Clock size={8} className="shrink-0" />
-              {formatRelativeDateTime(expense.created_at)}
-            </span>
-            {expense.receipt_url && (
-              <button
-                onClick={() => onViewReceipt(expense.receipt_url!)}
-                aria-label={`Ver comprovante de ${expense.description || 'despesa'}`}
-                className="flex items-center gap-1 text-blue-500 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-900 shadow-sm transition-all active:scale-90"
-              >
-                <Paperclip size={10} strokeWidth={3} />
-                <span className="text-[8px] font-black uppercase">Anexo</span>
-              </button>
+            {expense.merchant && (
+              <span className="text-[9px] text-slate-400 font-medium truncate leading-none mt-0.5">
+                {expense.merchant}
+              </span>
             )}
+
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">
+                {expense.profiles?.full_name?.split(' ')[0]}
+              </span>
+              <span className="text-[8px] text-slate-300 dark:text-slate-600">·</span>
+              <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
+                <Clock size={8} className="shrink-0" />
+                {formatExpenseDateTime(expense)}
+              </span>
+              {expense.payment_month && (
+                <span className="flex items-center gap-1 text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-lg border border-violet-100 dark:border-violet-800">
+                  <CreditCard size={9} strokeWidth={3} />
+                  <span className="text-[8px] font-black uppercase">
+                    {new Date(expense.payment_month + '-02').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '')}
+                  </span>
+                </span>
+              )}
+              {expense.receipt_url && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onViewReceipt(expense.receipt_url!); }}
+                  aria-label={`Ver comprovante de ${expense.description || 'despesa'}`}
+                  className="flex items-center gap-1 text-blue-500 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-900 shadow-sm transition-all active:scale-90"
+                >
+                  <Paperclip size={10} strokeWidth={3} />
+                  <span className="text-[8px] font-black uppercase">Anexo</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="text-right ml-2 shrink-0">
-        <span className="font-black text-slate-900 dark:text-white text-base block mb-1">
-          {formatCurrency(expense.amount)}
-        </span>
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={() => onEdit(expense)}
-            aria-label={`Editar despesa: ${expense.description || 'sem descrição'}`}
-            className="text-slate-300 dark:text-slate-500 hover:text-blue-500 transition-colors"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button
-            onClick={() => onDelete(expense)}
-            aria-label={`Remover despesa: ${expense.description || 'sem descrição'}`}
-            className="text-slate-300 dark:text-slate-500 hover:text-red-400 transition-colors"
-          >
-            <Trash2 size={16} />
-          </button>
+        <div className="text-right ml-2 shrink-0">
+          <span className="font-black text-slate-900 dark:text-white text-base block">
+            {formatCurrency(expense.amount)}
+          </span>
+          {/* Hint de swipe */}
+          {!isOpen && (
+            <div className="flex flex-col items-end gap-0.5 mt-1">
+              <span className="w-3 h-0.5 bg-slate-200 dark:bg-slate-600 rounded-full" />
+              <span className="w-2 h-0.5 bg-slate-200 dark:bg-slate-600 rounded-full" />
+            </div>
+          )}
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: DayGroup — cabeçalho de agrupamento por dia com total
@@ -318,20 +382,24 @@ interface Props {
   fetchData: () => void;
   showToast: (msg: string, type?: string) => void;
   onEdit: (exp: Expense) => void;
+  onDuplicate: (exp: Expense) => void;
   onViewReceipt: (url: string) => void;
   onDelete: (id: string) => Promise<void>;
 }
 
 export function TabExtrato({
   expenses, categories, prevMonthTotal, isLoading,
-  currentDate, fetchData, showToast, onEdit, onViewReceipt, onDelete,
+  currentDate, fetchData, showToast, onEdit, onDuplicate, onViewReceipt, onDelete,
 }: Props) {
-  const [searchTerm, setSearchTerm]       = useState('');
-  const [filterUserId, setFilterUserId]   = useState<string | null>(null);
-  const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [searchTerm, setSearchTerm]           = useState('');
+  const [filterUserId, setFilterUserId]       = useState<string | null>(null);
+  const [filterCategory, setFilterCategory]   = useState<string | null>(null);
+  const [periodFilter, setPeriodFilter]       = useState<PeriodFilter>('all');
+  const [customStart, setCustomStart]         = useState('');
+  const [customEnd, setCustomEnd]             = useState('');
+  const [isGalleryOpen, setIsGalleryOpen]     = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
-  const [sortMode, setSortMode]           = useState<SortMode>('newest');
+  const [sortMode, setSortMode]               = useState<SortMode>('newest');
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -342,9 +410,41 @@ export function TabExtrato({
     return map;
   }, [categories]);
 
+  // ── Filtro de período ──────────────────────────────────────────────────────
+  const periodFiltered = useMemo(() => {
+    if (periodFilter === 'all') return expenses;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (periodFilter === 'today') {
+      return expenses.filter(e => (e.expense_date || e.created_at.split('T')[0]) === todayStr);
+    }
+    if (periodFilter === 'week') {
+      const start = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd');
+      const end   = format(endOfWeek(new Date(),   { weekStartsOn: 0 }), 'yyyy-MM-dd');
+      return expenses.filter(e => {
+        const d = e.expense_date || e.created_at.split('T')[0];
+        return d >= start && d <= end;
+      });
+    }
+    if (periodFilter === 'custom') {
+      if (customStart && customEnd && customEnd < customStart) return expenses;
+      return expenses.filter(e => {
+        const d = e.expense_date || e.created_at.split('T')[0];
+        if (customStart && d < customStart) return false;
+        if (customEnd   && d > customEnd)   return false;
+        return true;
+      });
+    }
+    // '7days'
+    const sevenDaysAgo = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+    return expenses.filter(e => {
+      const d = e.expense_date || e.created_at.split('T')[0];
+      return d >= sevenDaysAgo;
+    });
+  }, [expenses, periodFilter, customStart, customEnd]);
+
   // ── Filtros + ordenação ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    let list = expenses
+    let list = periodFiltered
       .filter((e) => !filterUserId   || e.user_id === filterUserId)
       .filter((e) => !filterCategory || e.category_name === filterCategory)
       .filter((e) =>
@@ -354,8 +454,22 @@ export function TabExtrato({
       );
 
     switch (sortMode) {
-      case 'newest':  list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()); break;
-      case 'oldest':  list = [...list].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()); break;
+      case 'newest':
+        list = [...list].sort((a, b) => {
+          const da = a.expense_date || a.created_at.split('T')[0];
+          const db = b.expense_date || b.created_at.split('T')[0];
+          if (da !== db) return db.localeCompare(da);
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+        break;
+      case 'oldest':
+        list = [...list].sort((a, b) => {
+          const da = a.expense_date || a.created_at.split('T')[0];
+          const db = b.expense_date || b.created_at.split('T')[0];
+          if (da !== db) return da.localeCompare(db);
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        break;
       case 'highest': list = [...list].sort((a, b) => Number(b.amount) - Number(a.amount)); break;
       case 'lowest':  list = [...list].sort((a, b) => Number(a.amount) - Number(b.amount)); break;
     }
@@ -368,13 +482,14 @@ export function TabExtrato({
 
     const groups: { dateStr: string; items: Expense[]; total: number }[] = [];
     filtered.forEach((exp) => {
-      const expDate = new Date(exp.created_at);
-      const existing = groups.find((g) => isSameDay(new Date(g.dateStr), expDate));
+      // Usa expense_date como chave de agrupamento (yyyy-MM-dd)
+      const expDateStr = exp.expense_date || exp.created_at.split('T')[0];
+      const existing = groups.find((g) => g.dateStr === expDateStr);
       if (existing) {
         existing.items.push(exp);
         existing.total += Number(exp.amount);
       } else {
-        groups.push({ dateStr: exp.created_at, items: [exp], total: Number(exp.amount) });
+        groups.push({ dateStr: expDateStr, items: [exp], total: Number(exp.amount) });
       }
     });
     return groups;
@@ -389,6 +504,31 @@ export function TabExtrato({
   const expensesWithReceipts = useMemo(() => expenses.filter((e) => e.receipt_url), [expenses]);
 
   const diff = prevMonthTotal > 0 ? ((totalMonth - prevMonthTotal) / prevMonthTotal) * 100 : 0;
+
+  const isAnyFilterActive = !!(filterUserId || filterCategory || debouncedSearch || periodFilter !== 'all' || customStart || customEnd);
+
+  const daysElapsed = useMemo(() => {
+    const today = new Date();
+    const isCurrent = today.getMonth() === currentDate.getMonth() && today.getFullYear() === currentDate.getFullYear();
+    return isCurrent ? Math.max(today.getDate(), 1) : new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  }, [currentDate]);
+
+  const dailyAvg = totalMonth > 0 ? totalMonth / daysElapsed : 0;
+
+  const individualCatNames = useMemo(
+    () => new Set(categories.filter((c) => c.type === 'individual').map((c) => c.name)),
+    [categories]
+  );
+
+  const coupleTotal = useMemo(
+    () => expenses.filter((e) => !individualCatNames.has(e.category_name ?? '')).reduce((a, e) => a + Number(e.amount), 0),
+    [expenses, individualCatNames]
+  );
+
+  const individualTotal = useMemo(
+    () => expenses.filter((e) => individualCatNames.has(e.category_name ?? '')).reduce((a, e) => a + Number(e.amount), 0),
+    [expenses, individualCatNames]
+  );
 
   // ── Cycle de ordenação ────────────────────────────────────────────────────
   const cycleSort = () => {
@@ -412,10 +552,14 @@ export function TabExtrato({
     <div className="space-y-4">
 
       {/* 1. CARD RESUMO ───────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2.5rem] shadow-xl shadow-blue-500/20 text-white relative overflow-hidden">
+      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2.5rem] shadow-2xl shadow-blue-500/30 text-white relative overflow-hidden">
+        <div className="absolute -right-10 -top-10 w-44 h-44 bg-white/8 rounded-full pointer-events-none" />
+        <div className="absolute -left-6 -bottom-10 w-32 h-32 bg-indigo-400/20 rounded-full pointer-events-none" />
         <div className="relative z-10">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Total Filtrado</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">
+              {isAnyFilterActive ? 'Total Filtrado' : 'Total do Mês'}
+            </span>
             <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-black ${diff > 0 ? 'bg-red-400/30' : 'bg-emerald-400/30'}`}>
               {diff > 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
               {Math.abs(diff).toFixed(0)}% vs anterior
@@ -425,6 +569,27 @@ export function TabExtrato({
           <h1 className="text-4xl font-black tracking-tighter" aria-live="polite">
             {formatCurrency(totalFiltered)}
           </h1>
+
+          {/* Métricas rápidas — só quando sem filtro ativo */}
+          {!isAnyFilterActive && expenses.length > 0 && (
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <div className="flex items-center gap-1 bg-white/10 rounded-xl px-2.5 py-1">
+                <span className="text-[10px] font-black">{expenses.length}</span>
+                <span className="text-[9px] opacity-70">gastos</span>
+              </div>
+              <div className="flex items-center gap-1 bg-white/10 rounded-xl px-2.5 py-1">
+                <span className="text-[10px] font-black">{formatCurrency(dailyAvg)}</span>
+                <span className="text-[9px] opacity-70">/dia</span>
+              </div>
+              {individualTotal > 0 && (
+                <div className="flex items-center gap-2 bg-white/10 rounded-xl px-2.5 py-1">
+                  <span className="text-[9px] font-black text-blue-200">♥ {formatCurrency(coupleTotal)}</span>
+                  <span className="opacity-30 text-[9px]">·</span>
+                  <span className="text-[9px] font-black text-purple-200">↗ {formatCurrency(individualTotal)}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Busca */}
           <div className="flex items-center gap-2 mt-4 bg-black/10 p-1 rounded-2xl border border-white/5">
@@ -448,7 +613,67 @@ export function TabExtrato({
         <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/5 rounded-full blur-3xl pointer-events-none" />
       </div>
 
-      {/* 2. FILTROS POR USUÁRIO ───────────────────────────────────────────── */}
+      {/* 2. FILTROS DE PERÍODO ───────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 px-1 overflow-x-auto no-scrollbar">
+          {(['all', 'today', 'week', '7days', 'custom'] as const).map(period => (
+            <button
+              key={period}
+              onClick={() => setPeriodFilter(period)}
+              aria-pressed={periodFilter === period}
+              className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider transition-all border shrink-0 ${
+                periodFilter === period
+                  ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 border-transparent shadow-sm'
+                  : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400'
+              }`}
+            >
+              {period === 'all' ? 'Tudo' : period === 'today' ? 'Hoje' : period === 'week' ? 'Semana' : period === '7days' ? '7 dias' : 'Período'}
+            </button>
+          ))}
+        </div>
+
+        {/* Date pickers para período customizado */}
+        {periodFilter === 'custom' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="space-y-1.5 px-1"
+          >
+            <div className="flex gap-2">
+              <div className="flex-1 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400 px-3 pt-2">De</label>
+                <input
+                  type="date"
+                  value={customStart}
+                  onChange={e => setCustomStart(e.target.value)}
+                  className="w-full px-3 pb-2 bg-transparent outline-none text-xs font-bold text-slate-700 dark:text-slate-300"
+                />
+              </div>
+              <div className={`flex-1 bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden ${
+                customStart && customEnd && customEnd < customStart
+                  ? 'border-red-300 dark:border-red-700'
+                  : 'border-slate-200 dark:border-slate-700'
+              }`}>
+                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400 px-3 pt-2">Até</label>
+                <input
+                  type="date"
+                  value={customEnd}
+                  onChange={e => setCustomEnd(e.target.value)}
+                  className="w-full px-3 pb-2 bg-transparent outline-none text-xs font-bold text-slate-700 dark:text-slate-300"
+                />
+              </div>
+            </div>
+            {customStart && customEnd && customEnd < customStart && (
+              <p className="text-[9px] font-black text-red-500 uppercase tracking-wider px-1">
+                A data final deve ser maior que a inicial
+              </p>
+            )}
+          </motion.div>
+        )}
+      </div>
+
+      {/* 3. FILTROS POR USUÁRIO ───────────────────────────────────────────── */}
       <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1 px-1">
         <button
           onClick={() => setFilterUserId(null)} aria-pressed={!filterUserId}
@@ -565,6 +790,7 @@ export function TabExtrato({
                       categoryColor={categoryColorMap[exp.category_name ?? '']}
                       onEdit={onEdit}
                       onDelete={handleDeleteRequest}
+                      onDuplicate={onDuplicate}
                       onViewReceipt={onViewReceipt}
                     />
                   ))}
@@ -582,6 +808,7 @@ export function TabExtrato({
                 categoryColor={categoryColorMap[exp.category_name ?? '']}
                 onEdit={onEdit}
                 onDelete={handleDeleteRequest}
+                onDuplicate={onDuplicate}
                 onViewReceipt={onViewReceipt}
               />
             ))}

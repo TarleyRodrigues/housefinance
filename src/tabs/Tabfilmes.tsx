@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Search, X, Bookmark, Play, CheckCircle2,
   Trash2, Film, Tv, AlertTriangle, Loader2,
-  ListPlus, Eye, EyeOff, Star, ArrowUpDown,
+  ListPlus, Eye, EyeOff, Star, ArrowUpDown, ArrowRight,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,19 +168,24 @@ function StarRating({ value, onChange, size = 14 }: {
 // SUB: PosterCard
 // ─────────────────────────────────────────────────────────────────────────────
 function PosterCard({
-  item, categoryName, ratings, currentUserId,
-  onChangeStatus, onDelete, onRate,
+  item, categoryName, ratings, currentUserId, categories,
+  prominentRatings = false,
+  onChangeStatus, onDelete, onRate, onMove,
 }: {
   item: WatchlistItem;
   categoryName?: string;
   ratings: WatchlistRating[];
   currentUserId: string;
+  categories: WatchlistCategory[];
+  prominentRatings?: boolean;
   onChangeStatus: (id: string, status: WatchStatus) => Promise<void>;
   onDelete: (item: WatchlistItem) => void;
   onRate: (itemId: string, rating: number) => Promise<void>;
+  onMove: (id: string, catId: string) => Promise<void>;
 }) {
   const [showSynopsis, setShowSynopsis] = useState(false);
   const [showRating, setShowRating]     = useState(false);
+  const [showMove, setShowMove]         = useState(false);
   const statusCfg = STATUS_CONFIG[item.status];
   const statuses: WatchStatus[] = ['want', 'watching', 'watched'];
 
@@ -308,67 +313,180 @@ function PosterCard({
           {statusCfg.label}
         </div>
 
-        {/* ── NOTAS ──────────────────────────────────────────────────────── */}
-        <div className="pt-1 space-y-2 border-t border-slate-700/50">
+        {/* ── NOTAS / AVALIAÇÕES ─────────────────────────────────────────── */}
+        <div className="pt-2 space-y-1.5 border-t border-slate-700/50">
+          {prominentRatings ? (
+            /* Modo assistido: avaliações visíveis direto, com avatar + nome + estrelas */
+            <>
+              <p className="text-[7px] font-black uppercase tracking-[0.15em] text-slate-600 pb-0.5">Avaliações</p>
 
-          {/* Minha nota */}
-          <div>
+              {/* Minha avaliação */}
+              <AnimatePresence mode="wait">
+                {showRating ? (
+                  <motion.div
+                    key="edit"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="bg-slate-900/60 rounded-xl p-2.5"
+                  >
+                    <p className="text-[7px] font-black text-amber-400 uppercase tracking-widest mb-2">Sua nota</p>
+                    <StarRating
+                      value={myRating?.rating ?? 0}
+                      onChange={async (v) => { await onRate(item.id, v); setShowRating(false); }}
+                      size={22}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    key="my-display"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    onClick={() => setShowRating(true)}
+                    className="flex items-center gap-2 w-full py-0.5 active:opacity-60 transition-opacity"
+                  >
+                    <div className="w-6 h-6 rounded-full overflow-hidden border border-blue-500/50 shrink-0 bg-blue-900/50 flex items-center justify-center">
+                      {myRating?.profile?.avatar_url
+                        ? <img src={myRating.profile.avatar_url} alt="Você" className="w-full h-full object-cover" />
+                        : <Star size={10} className="text-blue-400" />
+                      }
+                    </div>
+                    <span className="text-[9px] font-bold text-slate-300 flex-1 text-left">
+                      {myRating?.profile?.full_name?.split(' ')[0] ?? 'Você'}
+                    </span>
+                    {myRating ? (
+                      <div className="flex gap-0.5">
+                        {[1,2,3,4,5].map((n) => (
+                          <Star key={n} size={11} className={n <= myRating.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'} />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[8px] text-blue-400/70 font-black uppercase tracking-wider">+ Avaliar</span>
+                    )}
+                  </motion.button>
+                )}
+              </AnimatePresence>
+
+              {/* Avaliações dos outros */}
+              {otherRatings.map((r) => (
+                <div key={r.user_id} className="flex items-center gap-2 py-0.5">
+                  <div className="w-6 h-6 rounded-full overflow-hidden border border-slate-600/50 shrink-0">
+                    <img
+                      src={r.profile?.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(r.profile?.full_name ?? 'U')}&size=32&background=475569&color=fff`}
+                      alt={r.profile?.full_name ?? 'Usuário'}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-300 flex-1 truncate">
+                    {r.profile?.full_name?.split(' ')[0] ?? 'Usuário'}
+                  </span>
+                  <div className="flex gap-0.5">
+                    {[1,2,3,4,5].map((n) => (
+                      <Star key={n} size={11} className={n <= r.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Nenhuma avaliação ainda */}
+              {!myRating && otherRatings.length === 0 && (
+                <button
+                  onClick={() => setShowRating(true)}
+                  className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-amber-500/60 active:opacity-70 transition-opacity"
+                >
+                  <Star size={9} className="text-amber-500/60" /> Avaliar este título
+                </button>
+              )}
+            </>
+          ) : (
+            /* Modo pendente: toggle compacto */
+            <>
+              <div>
+                <button
+                  onClick={() => setShowRating((v) => !v)}
+                  className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-amber-500/80 active:scale-95 transition-all"
+                >
+                  <Star size={9} className="fill-amber-500 text-amber-500" />
+                  {myRating ? `Minha nota: ${myRating.rating}★` : 'Avaliar'}
+                </button>
+                <AnimatePresence>
+                  {showRating && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-1.5 overflow-hidden"
+                    >
+                      <StarRating
+                        value={myRating?.rating ?? 0}
+                        onChange={async (v) => { await onRate(item.id, v); setShowRating(false); }}
+                        size={18}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              {otherRatings.length > 0 && (
+                <div className="space-y-1">
+                  {otherRatings.map((r) => (
+                    <div key={r.user_id} className="flex items-center gap-1.5">
+                      <img
+                        src={r.profile?.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(r.profile?.full_name ?? 'U')}&size=32`}
+                        alt={r.profile?.full_name ?? 'Usuário'}
+                        className="w-4 h-4 rounded-full object-cover border border-slate-600"
+                      />
+                      <span className="text-[8px] text-slate-400 font-bold truncate max-w-[50px]">
+                        {r.profile?.full_name?.split(' ')[0] ?? 'Usuário'}
+                      </span>
+                      <div className="flex gap-0.5">
+                        {[1,2,3,4,5].map((n) => (
+                          <Star key={n} size={8} className={n <= r.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Mover para outra categoria */}
+        {categories.filter((c) => c.id !== item.category_id).length > 0 && (
+          <div className="pt-1 border-t border-slate-700/50">
             <button
-              onClick={() => setShowRating((v) => !v)}
-              className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-amber-500/80 active:scale-95 transition-all"
+              onClick={() => setShowMove((v) => !v)}
+              className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-slate-500 active:scale-95 transition-all"
             >
-              <Star size={9} className="fill-amber-500 text-amber-500" />
-              {myRating ? `Minha nota: ${myRating.rating}★` : 'Avaliar'}
+              <ArrowRight size={9} />
+              {showMove ? 'Cancelar' : 'Mover'}
             </button>
-
             <AnimatePresence>
-              {showRating && (
+              {showMove && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   className="mt-1.5 overflow-hidden"
                 >
-                  <StarRating
-                    value={myRating?.rating ?? 0}
-                    onChange={async (v) => {
-                      await onRate(item.id, v);
-                      setShowRating(false);
-                    }}
-                    size={18}
-                  />
+                  <div className="flex flex-wrap gap-1">
+                    {categories
+                      .filter((c) => c.id !== item.category_id)
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={async () => { await onMove(item.id, c.id); setShowMove(false); }}
+                          className="px-2 py-1 bg-slate-700 text-slate-300 text-[8px] font-black uppercase tracking-wider rounded-lg active:scale-95 transition-all hover:bg-blue-600 hover:text-white"
+                        >
+                          {c.name}
+                        </button>
+                      ))
+                    }
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          {/* Notas dos outros usuários */}
-          {otherRatings.length > 0 && (
-            <div className="space-y-1">
-              {otherRatings.map((r) => (
-                <div key={r.user_id} className="flex items-center gap-1.5">
-                  <img
-                    src={r.profile?.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(r.profile?.full_name ?? 'U')}&size=32`}
-                    alt={r.profile?.full_name ?? 'Usuário'}
-                    className="w-4 h-4 rounded-full object-cover border border-slate-600"
-                  />
-                  <span className="text-[8px] text-slate-400 font-bold truncate max-w-[50px]">
-                    {r.profile?.full_name?.split(' ')[0] ?? 'Usuário'}
-                  </span>
-                  <div className="flex gap-0.5">
-                    {[1,2,3,4,5].map((n) => (
-                      <Star
-                        key={n}
-                        size={8}
-                        className={n <= r.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </motion.div>
   );
@@ -383,7 +501,7 @@ interface Props {
   watchlistRatings: WatchlistRating[];
   currentUserId: string;
   tmdbApiKey: string;
-  fetchData: () => void;
+  fetchData: (force?: boolean) => void;
   showToast: (msg: string, type?: string) => void;
   onAddCategory: (name: string) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
@@ -395,6 +513,7 @@ interface Props {
   onChangeStatus: (id: string, status: WatchStatus) => Promise<void>;
   onDeleteItem: (id: string) => Promise<void>;
   onRateItem: (itemId: string, rating: number) => Promise<void>;
+  onMoveItem: (id: string, categoryId: string) => Promise<void>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -404,7 +523,7 @@ export function TabFilmes({
   watchlistCategories, watchlistItems, watchlistRatings,
   currentUserId, tmdbApiKey, fetchData, showToast,
   onAddCategory, onDeleteCategory, onAddItem,
-  onChangeStatus, onDeleteItem, onRateItem,
+  onChangeStatus, onDeleteItem, onRateItem, onMoveItem,
 }: Props) {
   // ── Estado ──────────────────────────────────────────────────────────────
   const [activeCatId, setActiveCatId]       = useState<string>(ALL_CAT_ID);
@@ -414,13 +533,26 @@ export function TabFilmes({
   const [searchResults, setSearchResults]   = useState<TMDBResult[]>([]);
   const [searching, setSearching]           = useState(false);
   const [showSearch, setShowSearch]         = useState(false);
+  const [selectedAddCatId, setSelectedAddCatId] = useState<string>('');
   const [itemToDelete, setItemToDelete]     = useState<WatchlistItem | null>(null);
   const [catToDelete, setCatToDelete]       = useState<WatchlistCategory | null>(null);
   const [filterStatus, setFilterStatus]     = useState<WatchStatus | null>(null);
   const [filterType, setFilterType]         = useState<'all' | 'movie' | 'tv'>('all');
   const [sortOrder, setSortOrder]           = useState<'newest' | 'oldest'>('newest');
+  const [viewMode, setViewMode]             = useState<'pending' | 'watched'>('pending');
+  const [watchedSort, setWatchedSort]       = useState<'newest' | 'oldest' | 'rating_desc'>('rating_desc');
 
   const debouncedQuery = useDebounce(searchQuery, 400);
+
+  // Pré-seleciona categoria quando painel de busca abre
+  useEffect(() => {
+    if (!showSearch) return;
+    if (activeCatId !== ALL_CAT_ID) {
+      setSelectedAddCatId(activeCatId);
+    } else {
+      setSelectedAddCatId(watchlistCategories[0]?.id ?? '');
+    }
+  }, [showSearch, activeCatId, watchlistCategories]);
 
   // ── Busca TMDB ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -444,13 +576,13 @@ export function TabFilmes({
     return () => controller.abort();
   }, [debouncedQuery, tmdbApiKey]);
 
-  // ── Itens filtrados ───────────────────────────────────────────────────────
+  // ── Itens pendentes (want + watching) ────────────────────────────────────
   const filteredItems = useMemo(() => {
     let base = activeCatId === ALL_CAT_ID
       ? watchlistItems.filter((i) => i.status === 'want' || i.status === 'watching')
-      : watchlistItems.filter((i) => i.category_id === activeCatId);
+      : watchlistItems.filter((i) => i.category_id === activeCatId && (i.status === 'want' || i.status === 'watching'));
 
-    if (filterStatus) base = base.filter((i) => i.status === filterStatus);
+    if (filterStatus && filterStatus !== 'watched') base = base.filter((i) => i.status === filterStatus);
     if (filterType !== 'all') base = base.filter((i) => i.media_type === filterType);
 
     return [...base].sort((a, b) => {
@@ -459,6 +591,26 @@ export function TabFilmes({
       return sortOrder === 'newest' ? tb - ta : ta - tb;
     });
   }, [watchlistItems, activeCatId, filterStatus, filterType, sortOrder]);
+
+  // ── Itens assistidos (seção colapsável) ───────────────────────────────────
+  const watchedItems = useMemo(() => {
+    let base = activeCatId === ALL_CAT_ID
+      ? watchlistItems.filter((i) => i.status === 'watched')
+      : watchlistItems.filter((i) => i.category_id === activeCatId && i.status === 'watched');
+
+    if (filterType !== 'all') base = base.filter((i) => i.media_type === filterType);
+
+    return [...base].sort((a, b) => {
+      if (watchedSort === 'rating_desc') {
+        const ra = watchlistRatings.find((r) => r.item_id === a.id && r.user_id === currentUserId)?.rating ?? 0;
+        const rb = watchlistRatings.find((r) => r.item_id === b.id && r.user_id === currentUserId)?.rating ?? 0;
+        if (ra !== rb) return rb - ra;
+      }
+      const ta = new Date(a.created_at).getTime();
+      const tb = new Date(b.created_at).getTime();
+      return watchedSort === 'oldest' ? ta - tb : tb - ta;
+    });
+  }, [watchlistItems, activeCatId, filterType, watchedSort, watchlistRatings, currentUserId]);
 
   // ── Contadores ────────────────────────────────────────────────────────────
   const counts = useMemo(() => {
@@ -479,7 +631,7 @@ export function TabFilmes({
     try {
       await onAddCategory(newCatName.trim());
       setNewCatName(''); setShowNewCat(false);
-      showToast('Categoria criada!'); fetchData();
+      showToast('Categoria criada!'); fetchData(true);
     } catch { showToast('Erro ao criar categoria', 'error'); }
   }, [newCatName, onAddCategory, showToast, fetchData]);
 
@@ -488,14 +640,14 @@ export function TabFilmes({
     try {
       await onDeleteCategory(catToDelete.id);
       if (activeCatId === catToDelete.id) setActiveCatId(ALL_CAT_ID);
-      showToast('Categoria removida', 'info'); fetchData();
+      showToast('Categoria removida', 'info'); fetchData(true);
     } catch { showToast('Erro ao remover categoria', 'error'); }
     finally { setCatToDelete(null); }
   }, [catToDelete, activeCatId, onDeleteCategory, showToast, fetchData]);
 
   const handleAddItem = useCallback(async (result: TMDBResult) => {
-    const targetCatId = activeCatId === ALL_CAT_ID ? watchlistCategories[0]?.id : activeCatId;
-    if (!targetCatId) { showToast('Crie uma categoria primeiro', 'info'); return; }
+    const targetCatId = activeCatId === ALL_CAT_ID ? selectedAddCatId : activeCatId;
+    if (!targetCatId) { showToast('Selecione uma categoria', 'info'); return; }
     const alreadyExists = watchlistItems.some((i) => i.tmdb_id === result.id && i.category_id === targetCatId);
     if (alreadyExists) { showToast('Já está nesta categoria!', 'info'); return; }
     const title = result.title ?? result.name ?? 'Sem título';
@@ -503,24 +655,29 @@ export function TabFilmes({
     try {
       await onAddItem({ category_id: targetCatId, tmdb_id: result.id, title, poster_url: result.poster_path, synopsis: result.overview || null, year, media_type: result.media_type });
       showToast(`"${title}" adicionado!`);
-      setSearchQuery(''); setSearchResults([]); setShowSearch(false); fetchData();
+      setSearchQuery(''); setSearchResults([]); setShowSearch(false); fetchData(true);
     } catch { showToast('Erro ao adicionar', 'error'); }
-  }, [activeCatId, watchlistCategories, watchlistItems, onAddItem, showToast, fetchData]);
+  }, [activeCatId, selectedAddCatId, watchlistItems, onAddItem, showToast, fetchData]);
+
+  const handleMoveItem = useCallback(async (id: string, categoryId: string) => {
+    try { await onMoveItem(id, categoryId); showToast('Item movido!'); fetchData(true); }
+    catch { showToast('Erro ao mover item', 'error'); }
+  }, [onMoveItem, showToast, fetchData]);
 
   const handleChangeStatus = useCallback(async (id: string, status: WatchStatus) => {
-    try { await onChangeStatus(id, status); fetchData(); }
+    try { await onChangeStatus(id, status); fetchData(true); }
     catch { showToast('Erro ao atualizar status', 'error'); }
   }, [onChangeStatus, fetchData, showToast]);
 
   const handleDeleteItemConfirm = useCallback(async () => {
     if (!itemToDelete) return;
-    try { await onDeleteItem(itemToDelete.id); showToast('Removido', 'info'); fetchData(); }
+    try { await onDeleteItem(itemToDelete.id); showToast('Removido', 'info'); fetchData(true); }
     catch { showToast('Erro ao remover', 'error'); }
     finally { setItemToDelete(null); }
   }, [itemToDelete, onDeleteItem, showToast, fetchData]);
 
   const handleRateItem = useCallback(async (itemId: string, rating: number) => {
-    try { await onRateItem(itemId, rating); showToast('Avaliação salva! ⭐'); fetchData(); }
+    try { await onRateItem(itemId, rating); showToast('Avaliação salva! ⭐'); fetchData(true); }
     catch { showToast('Erro ao salvar avaliação', 'error'); }
   }, [onRateItem, showToast, fetchData]);
 
@@ -531,7 +688,9 @@ export function TabFilmes({
     <div className="space-y-4 pb-10">
 
       {/* ── 1. HEADER ──────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-5 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden border border-slate-700/50">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-5 rounded-[2.5rem] shadow-2xl shadow-black/40 text-white relative overflow-hidden border border-slate-700/50">
+        <div className="absolute -right-12 -top-12 w-48 h-48 bg-white/4 rounded-full pointer-events-none" />
+        <div className="absolute -left-8 -bottom-12 w-36 h-36 bg-slate-600/20 rounded-full pointer-events-none" />
         <div className="relative z-10">
           <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50 block mb-1">
             Minha Watchlist
@@ -553,22 +712,82 @@ export function TabFilmes({
             </button>
           </div>
 
-          {/* Filtros de status */}
-          <div className="flex gap-2 mt-4 flex-wrap">
-            {(['want', 'watching', 'watched'] as WatchStatus[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(filterStatus === s ? null : s)}
-                aria-pressed={filterStatus === s}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all active:scale-95 ${
-                  filterStatus === s ? STATUS_CONFIG[s].bg + ' text-white' : 'bg-white/5 text-white/40 border border-white/10'
-                }`}
-              >
-                {STATUS_CONFIG[s].icon} {counts[s]}
-              </button>
-            ))}
+          {/* Abas de visão: Para assistir / Assistidos */}
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setViewMode('pending')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${
+                viewMode === 'pending'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                  : 'bg-white/5 text-white/40 border border-white/10'
+              }`}
+            >
+              <Bookmark size={11} /> Para assistir
+              <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black ${viewMode === 'pending' ? 'bg-white/20' : 'bg-white/10'}`}>
+                {counts.want + counts.watching}
+              </span>
+            </button>
+            <button
+              onClick={() => setViewMode('watched')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${
+                viewMode === 'watched'
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                  : 'bg-white/5 text-white/40 border border-white/10'
+              }`}
+            >
+              <CheckCircle2 size={11} /> Assistidos
+              <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black ${viewMode === 'watched' ? 'bg-white/20' : 'bg-white/10'}`}>
+                {counts.watched}
+              </span>
+            </button>
+          </div>
 
-            {/* Toggle Filme/Série */}
+          {/* Filtros específicos por modo */}
+          <div className="flex gap-1.5 mt-2 flex-wrap items-center">
+            {viewMode === 'pending' ? (
+              <>
+                {(['want', 'watching'] as WatchStatus[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setFilterStatus(filterStatus === s ? null : s)}
+                    aria-pressed={filterStatus === s}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all active:scale-95 ${
+                      filterStatus === s ? STATUS_CONFIG[s].bg + ' text-white' : 'bg-white/5 text-white/40 border border-white/10'
+                    }`}
+                  >
+                    {STATUS_CONFIG[s].icon} {counts[s]}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setSortOrder((v) => v === 'newest' ? 'oldest' : 'newest')}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase bg-white/5 text-white/30 border border-white/10 active:scale-95 transition-all"
+                >
+                  <ArrowUpDown size={10} />
+                  {sortOrder === 'newest' ? 'Recentes' : 'Antigos'}
+                </button>
+              </>
+            ) : (
+              <>
+                {([
+                  { key: 'rating_desc', label: 'Melhor nota', icon: <Star size={9} className="fill-current" /> },
+                  { key: 'newest',      label: 'Recentes',    icon: <ArrowUpDown size={9} /> },
+                  { key: 'oldest',      label: 'Antigos',     icon: null },
+                ] as { key: 'newest' | 'oldest' | 'rating_desc'; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => setWatchedSort(key)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all active:scale-95 ${
+                      watchedSort === key
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white/5 text-white/40 border border-white/10'
+                    }`}
+                  >
+                    {icon}{label}
+                  </button>
+                ))}
+              </>
+            )}
+            {/* Filtro Filme/Série — visível em ambos os modos */}
             <div className="flex gap-1 ml-auto">
               {(['all', 'movie', 'tv'] as const).map((t) => (
                 <button
@@ -583,16 +802,6 @@ export function TabFilmes({
                 </button>
               ))}
             </div>
-
-            {/* Ordenação */}
-            <button
-              onClick={() => setSortOrder((v) => v === 'newest' ? 'oldest' : 'newest')}
-              aria-label="Alternar ordenação"
-              className="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase bg-white/5 text-white/30 border border-white/10 active:scale-95 transition-all"
-            >
-              <ArrowUpDown size={11} />
-              {sortOrder === 'newest' ? 'Recentes' : 'Antigos'}
-            </button>
           </div>
         </div>
         <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -607,9 +816,24 @@ export function TabFilmes({
             className="bg-slate-800 border border-slate-700 rounded-[2rem] p-4 space-y-3 shadow-xl"
           >
             {activeCatId === ALL_CAT_ID && watchlistCategories.length > 0 && (
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest px-1">
-                Adicionando em: <span className="text-blue-400">{watchlistCategories[0].name}</span>
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest px-1">Adicionar em:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {watchlistCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedAddCatId(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 ${
+                        selectedAddCatId === cat.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-400 border border-slate-600'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             <div className="relative">
               <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -633,8 +857,8 @@ export function TabFilmes({
                   {searchResults.map((result) => {
                     const title = result.title ?? result.name ?? 'Sem título';
                     const year = (result.release_date ?? result.first_air_date ?? '').slice(0, 4);
-                    const targetCatId = activeCatId === ALL_CAT_ID ? watchlistCategories[0]?.id : activeCatId;
-                    const alreadyIn = watchlistItems.some((i) => i.tmdb_id === result.id && i.category_id === targetCatId);
+                    const targetCatId = activeCatId === ALL_CAT_ID ? selectedAddCatId : activeCatId;
+                    const alreadyIn = !!targetCatId && watchlistItems.some((i) => i.tmdb_id === result.id && i.category_id === targetCatId);
                     return (
                       <motion.button
                         key={result.id} layout
@@ -759,42 +983,64 @@ export function TabFilmes({
         </div>
       </div>
 
-      {/* ── 4. GRID ────────────────────────────────────────────────────────── */}
-      {filteredItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <Film size={36} className="text-slate-300 dark:text-slate-600" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 dark:text-slate-600 text-center">
-            {activeCatId === ALL_CAT_ID
-              ? 'Nenhum título pendente\nAdicione filmes e séries para assistir'
-              : filterStatus
-                ? `Nenhum título com status "${STATUS_CONFIG[filterStatus].label}"`
-                : 'Nenhum título nesta categoria'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <AnimatePresence>
-            {filteredItems.map((item) => {
-              const catName = activeCatId === ALL_CAT_ID
-                ? watchlistCategories.find((c) => c.id === item.category_id)?.name
-                : undefined;
-              const itemRatings = watchlistRatings.filter((r) => r.item_id === item.id);
-              return (
-                <PosterCard
-                  key={item.id}
-                  item={item}
-                  categoryName={catName}
-                  ratings={itemRatings}
-                  currentUserId={currentUserId}
-                  onChangeStatus={handleChangeStatus}
-                  onDelete={setItemToDelete}
-                  onRate={handleRateItem}
-                />
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      )}
+      {/* ── 4. GRID (muda com viewMode) ────────────────────────────────────── */}
+      <AnimatePresence mode="wait">
+        {(viewMode === 'pending' ? filteredItems : watchedItems).length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center py-16 gap-3"
+          >
+            {viewMode === 'watched'
+              ? <CheckCircle2 size={36} className="text-slate-300 dark:text-slate-600" />
+              : <Film size={36} className="text-slate-300 dark:text-slate-600" />
+            }
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 dark:text-slate-600 text-center">
+              {viewMode === 'watched'
+                ? 'Nenhum título assistido ainda'
+                : activeCatId === ALL_CAT_ID
+                  ? 'Nenhum título pendente'
+                  : filterStatus
+                    ? `Nenhum título "${STATUS_CONFIG[filterStatus].label}"`
+                    : 'Nenhum título nesta categoria'}
+            </p>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={viewMode}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <AnimatePresence>
+                {(viewMode === 'pending' ? filteredItems : watchedItems).map((item) => {
+                  const catName = activeCatId === ALL_CAT_ID
+                    ? watchlistCategories.find((c) => c.id === item.category_id)?.name
+                    : undefined;
+                  const itemRatings = watchlistRatings.filter((r) => r.item_id === item.id);
+                  return (
+                    <PosterCard
+                      key={item.id}
+                      item={item}
+                      categoryName={catName}
+                      ratings={itemRatings}
+                      currentUserId={currentUserId}
+                      categories={watchlistCategories}
+                      prominentRatings={viewMode === 'watched'}
+                      onChangeStatus={handleChangeStatus}
+                      onDelete={setItemToDelete}
+                      onRate={handleRateItem}
+                      onMove={handleMoveItem}
+                    />
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── 5. MODAIS ──────────────────────────────────────────────────────── */}
       <ConfirmModal
