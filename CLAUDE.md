@@ -234,6 +234,66 @@ npm run deploy   # publica no GitHub Pages via gh-pages
 
 ---
 
+## Sistema de Tasks
+
+Tasks ficam em `/tasks/`. Cada arquivo é uma unidade de trabalho planejada.
+
+### Nomenclatura
+
+```
+tasks/Task-NNN-descricao-curta.md
+```
+
+### Tipos de Task
+
+| Tipo | O que Claude faz |
+|------|-----------------|
+| `ANÁLISE` | Pesquisa + relatório técnico. Sem alterar código. |
+| `IMPLEMENTAÇÃO` | Altera/cria arquivos do projeto seguindo o checklist de nova feature. |
+| `SQL` | Gera e apresenta SQL para o usuário rodar no Supabase. Nunca executa sozinho. |
+| `REFACTOR` | Melhora código existente sem alterar comportamento visível. |
+
+### Como Executar uma Task
+
+Ao receber "execute a Task-NNN" ou "rode a Task-NNN":
+
+1. Ler o arquivo `tasks/Task-NNN-*.md` integralmente antes de qualquer ação.
+2. Identificar o tipo da task (ANÁLISE, IMPLEMENTAÇÃO, SQL, REFACTOR).
+3. Seguir o plano e os critérios de aceitação descritos na task.
+4. Ao concluir, atualizar o campo `**Status:**` do arquivo para `CONCLUÍDO` e registrar a data.
+5. Atualizar o índice em `tasks/README.md`.
+
+### Estrutura Obrigatória de um Arquivo de Task
+
+```markdown
+# Task - NNN - Título da Task
+
+**Status:** ANÁLISE | PLANEJADO | EM ANDAMENTO | CONCLUÍDO | CANCELADO
+**Tipo:** Análise | Implementação | SQL | Refactor
+**Data de criação:** YYYY-MM-DD
+
+## Contexto
+[Por que essa task existe. Qual problema resolve.]
+
+## Objetivo
+[O que deve ser entregue ao final.]
+
+## Detalhamento Técnico
+[Para ANÁLISE: perguntas a responder.
+ Para IMPLEMENTAÇÃO: arquivos a criar/alterar, tipos, queries, UI.
+ Para SQL: o que o script deve fazer.
+ Para REFACTOR: o que mudar e por quê.]
+
+## Critérios de Aceitação
+- [ ] critério 1
+- [ ] critério 2
+
+## Observações para o Claude
+[Restrições, preferências, dependências de outras tasks.]
+```
+
+---
+
 ## Contexto do Projeto
 
 - App usado diariamente pelo casal (dados reais, banco em produção)
