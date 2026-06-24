@@ -1,0 +1,1 @@
+import{t as n,g as e}from"./index-DtYbWwrw.js";import{a as c,c as i}from"./isToday-BuQLVHHL.js";function u(r,t,s){const a=n(r,s==null?void 0:s.in);return isNaN(t)?e(r,NaN):(t&&a.setDate(a.getDate()+t),a)}function f(r,t,s){return u(r,-t,s)}function N(r,t){return c(e(r,r),f(i(r),1))}export{N as i,f as s};

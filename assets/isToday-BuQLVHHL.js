@@ -1,0 +1,1 @@
+import{g as s,n as o,q as n}from"./index-DtYbWwrw.js";function u(t){return s(t,Date.now())}function i(t,r,a){const[c,e]=o(a==null?void 0:a.in,t,r);return+n(c)==+n(e)}function m(t,r){return i(s(t,t),u(t))}export{i as a,u as c,m as i};
