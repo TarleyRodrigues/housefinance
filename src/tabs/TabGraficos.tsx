@@ -22,7 +22,8 @@ import {
 } from 'recharts';
 import { formatCurrency, CHART_COLORS, USER_COLORS } from '../utils';
 import { useGeminiAnalysis } from '../hooks/useGeminiAnalysis';
-import type { Expense, Category, RecurringExpense, AIAnalysis } from '../types';
+import { SpendingHistory } from '../components/SpendingHistory';
+import type { Expense, Category, RecurringExpense, AIAnalysis, HistoryExpense } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -44,6 +45,8 @@ interface Props {
   recurringExpenses: RecurringExpense[];
   annualChartData: { name: string; total: number }[];
   aiAnalyses: AIAnalysis[];
+  historyExpenses: HistoryExpense[];
+  isLoading: boolean;
   currentDate: Date;
   showToast: (msg: string, type?: string) => void;
   onSaveAnalysis: (content: string, month: string, monthDisplay: string) => Promise<void>;
@@ -195,7 +198,7 @@ function AnalysisHistory({ analyses, currentMonthKey }: { analyses: AIAnalysis[]
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabGraficos({
   expenses, prevMonthExpenses, categories, recurringExpenses,
-  annualChartData, aiAnalyses, currentDate, showToast, onSaveAnalysis,
+  annualChartData, aiAnalyses, historyExpenses, isLoading, currentDate, showToast, onSaveAnalysis,
 }: Props) {
 
   // Análise do mês atual (salva no banco) e histórico dos meses anteriores
@@ -693,6 +696,14 @@ export function TabGraficos({
           </p>
         </motion.div>
       )}
+
+      {/* ── Histórico mensal por categoria / estabelecimento ─────────────── */}
+      <SpendingHistory
+        historyExpenses={historyExpenses}
+        categories={categories}
+        currentDate={currentDate}
+        isLoading={isLoading}
+      />
 
       {/* ══════════════════════════════════════════════════════════════════════
           SEÇÃO PRINCIPAL — CASAL

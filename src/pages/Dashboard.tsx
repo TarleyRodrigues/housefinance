@@ -18,6 +18,7 @@ import { Toast, SkeletonCard } from '../components/ui';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useAuth } from '../AuthContext';
 import { supabase } from '../supabase';
+import { formatCurrency } from '../utils';
 
 import { TabExtrato }   from '../tabs/TabExtrato';
 import { TabNovoGasto } from '../tabs/TabNovoGasto';
@@ -34,7 +35,7 @@ const TabSonhos      = lazy(() => import('../tabs/TabSonhos').then(m      => ({ 
 const TabLogs        = lazy(() => import('../tabs/TabLogs').then(m        => ({ default: m.TabLogs        })));
 const TabRecorrentes = lazy(() => import('../tabs/TabRecorrentes').then(m => ({ default: m.TabRecorrentes })));
 
-import type { Expense, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint } from '../types';
+import type { Expense, ExpensePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 
 const RECIPE_BUCKET = 'recipe-images';
@@ -196,7 +197,7 @@ export default function Dashboard() {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses,
+    aiAnalyses, historyExpenses,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
   } = useDashboardData(currentDate, activeTab);
 
@@ -257,6 +258,33 @@ export default function Dashboard() {
     const { error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', id);
     if (error) throw error;
   }, []);
+
+  const saveExpense = useCallback(async (payload: ExpensePayload, editId: string | null) => {
+    if (!user) throw new Error('Não autenticado');
+    if (editId) {
+      const { error } = await supabase.from('expenses').update(payload).eq('id', editId);
+      if (error) throw error;
+      await supabase.from('logs').insert({
+        user_id: user.id, action: 'UPDATE', item_description: payload.description,
+        details: `Valor alterado para ${formatCurrency(payload.amount)} na categoria ${payload.category_name}`,
+      });
+    } else {
+      const { error } = await supabase.from('expenses').insert({ ...payload, user_id: user.id });
+      if (error) throw error;
+      await supabase.from('logs').insert({
+        user_id: user.id, action: 'INSERT', item_description: payload.description,
+        details: `Inseriu novo gasto de ${formatCurrency(payload.amount)}`,
+      });
+    }
+  }, [user]);
+
+  const uploadReceipt = useCallback(async (file: File): Promise<string> => {
+    if (!user) throw new Error('Não autenticado');
+    const fileName = `${user.id}-${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+    const { error } = await supabase.storage.from('receipts').upload(fileName, file);
+    if (error) throw error;
+    return supabase.storage.from('receipts').getPublicUrl(fileName).data.publicUrl;
+  }, [user]);
 
   // ── Lembretes ─────────────────────────────────────────────────────────────
   const saveReminder = useCallback(async ({ text, date, time, editId }: {
@@ -540,6 +568,7 @@ export default function Dashboard() {
     if (error) throw error;
     if (name && oldName && name !== oldName) {
       await supabase.from('expenses').update({ category_name: name }).eq('category_name', oldName);
+      await supabase.from('expense_templates').update({ category_name: name }).eq('category_name', oldName);
     }
   }, []);
 
@@ -556,6 +585,13 @@ export default function Dashboard() {
     const { error } = await supabase.from('expense_templates').insert({ ...payload, user_id: user.id });
     if (error) throw error;
   }, [user]);
+
+  const updateTemplate = useCallback(async (id: string, payload: {
+    description: string; amount: number; category_name: string;
+  }) => {
+    const { error } = await supabase.from('expense_templates').update(payload).eq('id', id);
+    if (error) throw error;
+  }, []);
 
   const deleteTemplate = useCallback(async (id: string) => {
     const { error } = await supabase.from('expense_templates').delete().eq('id', id);
@@ -1033,6 +1069,7 @@ export default function Dashboard() {
               <TabNovoGasto categories={categories} expenses={expenses} merchants={merchants} editingExpense={editingExpense}
                 duplicateData={duplicatingExpense}
                 templates={expenseTemplates}
+                onSave={saveExpense} onUploadReceipt={uploadReceipt} onAddTemplate={addTemplate}
                 fetchData={fetchData} showToast={showToast} onSaved={() => setActiveTab('list')} />
             )}
             {activeTab === 'shopping' && (
@@ -1057,6 +1094,7 @@ export default function Dashboard() {
               <TabGraficos expenses={expenses} prevMonthExpenses={prevMonthExpenses}
                 categories={categories} annualChartData={annualChartData}
                 recurringExpenses={recurringExpenses} aiAnalyses={aiAnalyses}
+                historyExpenses={historyExpenses} isLoading={isLoading}
                 currentDate={currentDate} showToast={showToast}
                 onSaveAnalysis={saveAIAnalysis} />
             )}
@@ -1069,7 +1107,7 @@ export default function Dashboard() {
                 onOpenLogs={() => setActiveTab('logs')} onSignOut={signOut}
                 onAddCategory={addCategory} onUpdateCategory={updateCategory}
                 onDeleteCategory={deleteCategory}
-                onAddTemplate={addTemplate} onDeleteTemplate={deleteTemplate}
+                onAddTemplate={addTemplate} onUpdateTemplate={updateTemplate} onDeleteTemplate={deleteTemplate}
                 onAddShoppingCategory={addShoppingCategory}
                 onUpdateShoppingCategory={updateShoppingCategory}
                 onDeleteShoppingCategory={deleteShoppingCategory}
