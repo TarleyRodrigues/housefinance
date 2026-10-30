@@ -6,10 +6,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Loader2, Image as ImageIcon, X, Zap, CalendarDays, Store, CreditCard } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 import { haptic } from '../utils/haptic';
-import { supabase } from '../supabase';
-import { useAuth } from '../AuthContext';
 import { handleCurrencyInput, parseAmount, formatCurrency } from '../utils';
-import type { Category, Expense, ExpenseTemplate, Merchant } from '../types';
+import type { Category, Expense, ExpensePayload, ExpenseTemplate, Merchant } from '../types';
 
 interface Props {
   categories: Category[];
@@ -18,15 +16,19 @@ interface Props {
   editingExpense: Expense | null;
   duplicateData?: Expense | null;
   templates: ExpenseTemplate[];
+  onSave: (payload: ExpensePayload, editId: string | null) => Promise<void>;
+  onUploadReceipt: (file: File) => Promise<string>;
+  onAddTemplate: (payload: { description: string; amount: number; category_name: string }) => Promise<void>;
   fetchData: () => void;
   showToast: (msg: string, type?: string) => void;
   onSaved: () => void;
   currentDate?: Date;
 }
 
-export function TabNovoGasto({ categories, expenses, merchants, editingExpense, duplicateData, templates, fetchData, showToast, onSaved, currentDate }: Props) {
-  const { user } = useAuth();
+const errorMessage = (err: unknown) =>
+  err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
 
+export function TabNovoGasto({ categories, expenses, merchants, editingExpense, duplicateData, templates, onSave, onUploadReceipt, onAddTemplate, fetchData, showToast, onSaved, currentDate }: Props) {
   const today  = currentDate ?? new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const defaultPaymentMonth = format(addMonths(today, 1), 'yyyy-MM');
@@ -40,6 +42,8 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
   const [isCredit, setIsCredit]     = useState(false);
   const [paymentMonth, setPaymentMonth] = useState(defaultPaymentMonth);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [showMerchantSuggestions, setShowMerchantSuggestions] = useState(false);
   const merchantRef = useRef<HTMLDivElement>(null);
 
@@ -116,75 +120,92 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
 
   // Aplica um template ao formulário
   const applyTemplate = (tpl: ExpenseTemplate) => {
+    haptic('light');
     setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(tpl.amount));
-    setCategory(tpl.category_name);
     setDescription(tpl.description);
+    // Categoria pode ter sido apagada/renomeada depois que o template foi criado
+    if (categories.some(c => c.name === tpl.category_name)) {
+      setCategory(tpl.category_name);
+    } else {
+      setCategory('');
+      showToast(`Categoria "${tpl.category_name}" não existe mais — escolha outra`, 'error');
+    }
+  };
+
+  // Já existe template igual (mesma descrição + categoria + valor)?
+  const matchesExistingTemplate = useMemo(() => {
+    const value = parseAmount(amount);
+    const desc = description.trim().toLowerCase();
+    return templates.some(t =>
+      t.description.trim().toLowerCase() === desc && t.category_name === category && Number(t.amount) === value);
+  }, [templates, amount, description, category]);
+
+  const handleSaveAsTemplate = async () => {
+    const value = parseAmount(amount);
+    if (!description.trim() || !category || isNaN(value) || value <= 0) {
+      showToast('Preencha valor, categoria e descrição para salvar como padrão', 'error');
+      return;
+    }
+    setSavingTemplate(true);
+    try {
+      await onAddTemplate({ description: description.trim(), amount: value, category_name: category });
+      haptic('light');
+      showToast('Salvo como gasto padrão!');
+      fetchData();
+    } catch (err: unknown) {
+      showToast('Erro ao salvar gasto padrão: ' + errorMessage(err), 'error');
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
   const handleReceiptUpload = async (file: File) => {
     setUploadingReceipt(true);
-    const fileName = `${user.id}-${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-    const { error } = await supabase.storage.from('receipts').upload(fileName, file);
-    if (!error) {
-      const { data } = supabase.storage.from('receipts').getPublicUrl(fileName);
-      setReceiptUrl(data.publicUrl);
+    try {
+      setReceiptUrl(await onUploadReceipt(file));
       showToast('Comprovante anexado!');
-    } else {
-      alert('Erro ao subir imagem: ' + error.message);
+    } catch (err: unknown) {
+      showToast('Erro ao subir imagem: ' + errorMessage(err), 'error');
+    } finally {
+      setUploadingReceipt(false);
     }
-    setUploadingReceipt(false);
   };
 
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
-    if (!user) return;
+    if (saving) return; // evita gasto duplicado em duplo toque
     if (!category) {
       showToast('Selecione uma categoria', 'error');
       return;
     }
 
     const numericAmount = parseAmount(amount);
-    const itemDesc = description || 'Gasto sem descrição';
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      showToast('Informe um valor maior que zero', 'error');
+      return;
+    }
 
-    const payload = {
+    const payload: ExpensePayload = {
       amount: numericAmount,
       category_name: category,
-      description: itemDesc,
-      receipt_url: receiptUrl,
+      description: description.trim() || 'Gasto sem descrição',
+      receipt_url: receiptUrl || null,
       expense_date: date,
       merchant: merchant.trim() || null,
       payment_month: isCredit ? paymentMonth : null,
     };
 
+    setSaving(true);
     try {
-      if (editingExpense) {
-        const { error: expError } = await supabase.from('expenses').update(payload).eq('id', editingExpense.id);
-        if (expError) throw expError;
-
-        await supabase.from('logs').insert({
-          user_id: user.id,
-          action: 'UPDATE',
-          item_description: itemDesc,
-          details: `Valor alterado para ${formatCurrency(numericAmount)} na categoria ${category}`,
-        });
-      } else {
-        const { error: expError } = await supabase.from('expenses').insert({ ...payload, user_id: user.id });
-        if (expError) throw expError;
-
-        await supabase.from('logs').insert({
-          user_id: user.id,
-          action: 'INSERT',
-          item_description: itemDesc,
-          details: `Inseriu novo gasto de ${formatCurrency(numericAmount)}`,
-        });
-      }
-
+      await onSave(payload, editingExpense?.id ?? null);
       haptic('light');
       showToast('Salvo com sucesso!');
       fetchData();
       onSaved();
     } catch (err: unknown) {
-      alert('Erro ao processar: ' + (err instanceof Error ? err.message : String(err)));
+      showToast('Erro ao salvar: ' + errorMessage(err), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -192,7 +213,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
     <div className="space-y-4 w-full overflow-x-hidden">
 
       {/* ── TEMPLATES DE GASTOS PADRÃO ─────────────────────────────────────── */}
-      {templates.length > 0 && (
+      {templates.length > 0 && !editingExpense && (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Zap size={13} className="text-amber-500" />
@@ -390,7 +411,12 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                 type="file"
                 className="hidden"
                 accept="image/*"
-                onChange={(e) => e.target.files && handleReceiptUpload(e.target.files[0])}
+                disabled={uploadingReceipt}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = ''; // permite reanexar o mesmo arquivo
+                  if (file) handleReceiptUpload(file);
+                }}
               />
             </label>
             {receiptUrl && (
@@ -404,9 +430,26 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
             )}
           </div>
 
-          <button className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black py-5 rounded-3xl shadow-xl shadow-blue-500/40 active:scale-95 active:shadow-blue-500/20 transition-all uppercase tracking-widest text-sm">
-            Salvar Registro
+          <button
+            type="submit"
+            disabled={saving || uploadingReceipt}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black py-5 rounded-3xl shadow-xl shadow-blue-500/40 active:scale-95 active:shadow-blue-500/20 transition-all uppercase tracking-widest text-sm disabled:opacity-60 disabled:active:scale-100"
+          >
+            {saving && <Loader2 className="animate-spin" size={16} />}
+            {saving ? 'Salvando...' : 'Salvar Registro'}
           </button>
+
+          {!editingExpense && !matchesExistingTemplate && (
+            <button
+              type="button"
+              onClick={handleSaveAsTemplate}
+              disabled={savingTemplate || saving}
+              className="w-full min-h-[44px] flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+            >
+              {savingTemplate ? <Loader2 className="animate-spin" size={13} /> : <Zap size={13} />}
+              Salvar como gasto padrão
+            </button>
+          )}
         </form>
       </div>
     </div>

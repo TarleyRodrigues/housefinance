@@ -26,6 +26,9 @@ export const addMonths = (dateStr: string, n: number): string => {
 export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 export const USER_COLORS  = ['#3b82f6', '#ec4899'];
 
+// Quantos meses o histórico por categoria/estabelecimento cobre (inclui o mês selecionado)
+export const HISTORY_MONTHS = 12;
+
 // ── TMDB ──────────────────────────────────────────────────────────────────────
 // Chave da API TMDB — use SEMPRE via import.meta.env.VITE_TMDB_KEY no código.
 // Este export é apenas uma referência do valor padrão para desenvolvimento.

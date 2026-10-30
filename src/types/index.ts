@@ -32,6 +32,29 @@ export interface Expense {
   profiles?: Profile;     // sempre objeto — normalizado no useDashboardData
 }
 
+// Linha enxuta de gasto usada no histórico mensal (Gráficos › Histórico)
+export interface HistoryExpense {
+  id: string;
+  amount: number;
+  category_name: string;
+  description?: string;
+  merchant?: string | null;
+  expense_date?: string;
+  payment_month?: string | null;
+  created_at: string;
+}
+
+// Payload de criação/edição de gasto (TabNovoGasto → Dashboard)
+export interface ExpensePayload {
+  amount: number;
+  category_name: string;
+  description: string;
+  receipt_url: string | null;
+  expense_date: string;
+  merchant: string | null;
+  payment_month: string | null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ExpenseTemplate (Gastos Padrão)
 // ─────────────────────────────────────────────────────────────────────────────

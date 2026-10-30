@@ -12,8 +12,9 @@ import { startOfMonth, endOfMonth, subMonths, addMonths, format } from 'date-fns
 import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
   WatchlistCategory, WatchlistItem, Dream, ExpenseTemplate, RecurringExpense, AIAnalysis,
-  ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant,
+  ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant, HistoryExpense,
 } from '../types';
+import { HISTORY_MONTHS } from '../utils';
 import type { WatchlistRating } from '../tabs/Tabfilmes';
 import type { Recipe } from '../tabs/TabReceitas';
 
@@ -59,6 +60,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [shoppingCategories, setShoppingCategories]   = useState<ShoppingCategory[]>([]);
   const [notificationEmails, setNotificationEmails]   = useState<NotificationEmail[]>([]);
   const [merchants, setMerchants]                     = useState<Merchant[]>([]);
+  const [historyExpenses, setHistoryExpenses]         = useState<HistoryExpense[]>([]);
   const [isLoading, setIsLoading]                     = useState(true);
   const [error, setError]                             = useState<string | null>(null);
 
@@ -248,12 +250,15 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       setDreams((dData ?? []) as Dream[]);
 
       // 7. Templates de gastos padrão — sempre carregado (usado na aba 'add')
-      const { data: tpl, error: tplErr } = await supabase
-        .from('expense_templates')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (tplErr) throw tplErr;
-      setExpenseTemplates((tpl ?? []) as ExpenseTemplate[]);
+      // Não bloqueia o resto do app se falhar (ex: RLS/tabela ausente)
+      {
+        const { data: tpl, error: tplErr } = await supabase
+          .from('expense_templates')
+          .select('*')
+          .order('description');
+        if (tplErr) console.error('[useDashboardData] expense_templates', tplErr);
+        else setExpenseTemplates((tpl ?? []) as ExpenseTemplate[]);
+      }
 
       // 8. Gastos recorrentes — sempre carregado (badge + home + aba recurrent)
       const { data: recData, error: recErr } = await supabase
@@ -340,6 +345,27 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         tabCacheRef.current['movies'] = Date.now();
       }
 
+      // Histórico de 12 meses (até o mês selecionado) — usado em Gráficos › Histórico
+      if (activeTab === 'stats' && isTabStale(`history-${dates.monthStr}`)) {
+        const histStart = startOfMonth(subMonths(currentDate, HISTORY_MONTHS - 1));
+        const histStartStr = format(histStart, 'yyyy-MM');
+        const histFilter = `payment_month.gte.${histStartStr},and(payment_month.is.null,expense_date.gte.${format(histStart, 'yyyy-MM-dd')})`;
+        const { data: hist, error: histErr } = await supabase
+          .from('expenses')
+          .select('id, amount, category_name, description, merchant, expense_date, payment_month, created_at')
+          .eq('is_deleted', false)
+          .or(histFilter)
+          .order('expense_date', { ascending: false })
+          .limit(5000);
+        if (histErr) throw histErr;
+        // Corta no mês selecionado (mês efetivo = payment_month ou mês de expense_date)
+        setHistoryExpenses(((hist ?? []) as HistoryExpense[]).filter((e) => {
+          const m = e.payment_month ?? e.expense_date?.slice(0, 7) ?? '';
+          return m >= histStartStr && m <= dates.monthStr;
+        }));
+        tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
+      }
+
       if (activeTab === 'recipes' && isTabStale('recipes')) {
         await fetchRecipes();
         tabCacheRef.current['recipes'] = Date.now();
@@ -352,7 +378,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [dates, activeTab, user, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants]);
+  }, [dates, currentDate, activeTab, user, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -363,6 +389,10 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     // Debounce para não disparar fetchData múltiplas vezes em cascata
     let timer: ReturnType<typeof setTimeout>;
     const refresh = () => {
+      // Gastos mudaram: invalida o cache do histórico
+      for (const key of Object.keys(tabCacheRef.current)) {
+        if (key.startsWith('history-')) delete tabCacheRef.current[key];
+      }
       clearTimeout(timer);
       timer = setTimeout(() => fetchData(), 800);
     };
@@ -385,7 +415,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses,
+    aiAnalyses, historyExpenses,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
   };

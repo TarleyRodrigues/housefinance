@@ -9,7 +9,7 @@ import {
   Moon, Sun, LogOut, Plus, Trash2, History,
   Check, AlertTriangle, Download, TrendingUp,
   Calendar, Tag, Users, User, Zap, ChevronDown, ShoppingCart, Bell, Mail, ToggleLeft, ToggleRight,
-  Store, Pencil, Search,
+  Store, Pencil, Search, Loader2,
 } from 'lucide-react';
 import { formatCurrency, handleCurrencyInput, parseAmount } from '../utils';
 import { format } from 'date-fns';
@@ -82,31 +82,57 @@ interface TemplateManagerProps {
   templates: ExpenseTemplate[];
   categories: Category[];
   onAdd: (payload: { description: string; amount: number; category_name: string }) => Promise<void>;
+  onUpdate: (id: string, payload: { description: string; amount: number; category_name: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   showToast: (msg: string, type?: string) => void;
   fetchData: () => void;
 }
 
-function ExpenseTemplateManager({ templates, categories, onAdd, onDelete, showToast, fetchData }: TemplateManagerProps) {
-  const [form, setForm]   = useState({ description: '', amount: '', category_name: '' });
+// ConfirmModal renderiza HTML — escapa texto digitado pelo usuário
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const EMPTY_TEMPLATE_FORM ={ description: '', amount: '', category_name: '' };
+
+function ExpenseTemplateManager({ templates, categories, onAdd, onUpdate, onDelete, showToast, fetchData }: TemplateManagerProps) {
+  const [form, setForm]   = useState(EMPTY_TEMPLATE_FORM);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [toDelete, setToDelete] = useState<ExpenseTemplate | null>(null);
 
   const patch = (partial: Partial<typeof form>) => setForm((f) => ({ ...f, ...partial }));
 
-  const handleAdd = async () => {
+  const startEdit = (tpl: ExpenseTemplate) => {
+    setEditingId(tpl.id);
+    setForm({
+      description: tpl.description,
+      amount: new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(tpl.amount),
+      // Categoria apagada/renomeada: força escolher de novo
+      category_name: categories.some((c) => c.name === tpl.category_name) ? tpl.category_name : '',
+    });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setForm(EMPTY_TEMPLATE_FORM); };
+
+  const handleSubmit = async () => {
     const amount = parseAmount(form.amount);
     if (!form.description.trim() || isNaN(amount) || amount <= 0 || !form.category_name) {
       showToast('Preencha descrição, valor e categoria', 'error');
       return;
     }
+    const payload = { description: form.description.trim(), amount, category_name: form.category_name };
     setLoading(true);
     try {
-      await onAdd({ description: form.description.trim(), amount, category_name: form.category_name });
-      setForm({ description: '', amount: '', category_name: '' });
-      showToast('Template criado!');
+      if (editingId) await onUpdate(editingId, payload);
+      else await onAdd(payload);
+      showToast(editingId ? 'Template atualizado!' : 'Template criado!');
+      cancelEdit();
       fetchData();
-    } catch { showToast('Erro ao criar template', 'error'); }
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message;
+      console.error('Erro ao salvar template:', err);
+      showToast(msg ? `Erro ao salvar template: ${msg}` : 'Erro ao salvar template', 'error');
+    }
     finally { setLoading(false); }
   };
 
@@ -125,7 +151,7 @@ function ExpenseTemplateManager({ templates, categories, onAdd, onDelete, showTo
       {/* Formulário de novo template */}
       <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-[2rem] border border-amber-100 dark:border-amber-900/30">
         <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
-          Novo template
+          {editingId ? 'Editar template' : 'Novo template'}
         </p>
         <input
           className="w-full p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 text-sm outline-none font-bold text-slate-800 dark:text-white placeholder:text-slate-300 focus:border-amber-400 dark:focus:border-amber-600 transition-colors"
@@ -154,14 +180,26 @@ function ExpenseTemplateManager({ templates, categories, onAdd, onDelete, showTo
             <option key={c.id} value={c.name}>{c.name}</option>
           ))}
         </select>
-        <button
-          onClick={handleAdd}
-          disabled={loading}
-          className="w-full py-3 bg-amber-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          <Plus size={14} />
-          Salvar Template
-        </button>
+        <div className="flex gap-2">
+          {editingId && (
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={loading}
+              className="min-h-[44px] px-4 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 font-black text-xs uppercase tracking-widest rounded-2xl border border-slate-200 dark:border-slate-700 active:scale-95 transition-all disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          )}
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 min-h-[44px] py-3 bg-amber-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : editingId ? <Check size={14} /> : <Plus size={14} />}
+            {editingId ? 'Salvar Alterações' : 'Salvar Template'}
+          </button>
+        </div>
       </div>
 
       {/* Lista de templates existentes */}
@@ -175,18 +213,30 @@ function ExpenseTemplateManager({ templates, categories, onAdd, onDelete, showTo
             <motion.div
               key={tpl.id} layout
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-              className="flex items-center justify-between p-4 bg-white dark:bg-slate-900/50 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 shadow-sm"
+              className={`flex items-center justify-between p-4 bg-white dark:bg-slate-900/50 rounded-[1.5rem] border shadow-sm ${
+                editingId === tpl.id ? 'border-amber-400 dark:border-amber-600' : 'border-slate-100 dark:border-slate-800'
+              }`}
             >
               <div className="flex-1 min-w-0">
                 <p className="font-black text-sm text-slate-800 dark:text-slate-200 truncate">{tpl.description}</p>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
                   {formatCurrency(tpl.amount)} · {tpl.category_name}
+                  {!categories.some((c) => c.name === tpl.category_name) && (
+                    <span className="text-red-400 normal-case"> (categoria removida)</span>
+                  )}
                 </p>
               </div>
               <button
+                onClick={() => startEdit(tpl)}
+                aria-label={`Editar template ${tpl.description}`}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-amber-500 active:scale-90 transition-all"
+              >
+                <Pencil size={15} />
+              </button>
+              <button
                 onClick={() => setToDelete(tpl)}
                 aria-label={`Apagar template ${tpl.description}`}
-                className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 active:scale-90 transition-all"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-red-500 active:scale-90 transition-all"
               >
                 <Trash2 size={15} />
               </button>
@@ -198,7 +248,7 @@ function ExpenseTemplateManager({ templates, categories, onAdd, onDelete, showTo
       <ConfirmModal
         isOpen={!!toDelete}
         title="Apagar template?"
-        description={`<strong>${toDelete?.description}</strong><br/>Não afeta gastos já registrados.`}
+        description={`<strong>${escapeHtml(toDelete?.description ?? '')}</strong><br/>Não afeta gastos já registrados.`}
         confirmLabel="Apagar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setToDelete(null)}
@@ -1015,6 +1065,7 @@ interface Props {
   }) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
   onAddTemplate: (payload: { description: string; amount: number; category_name: string }) => Promise<void>;
+  onUpdateTemplate: (id: string, payload: { description: string; amount: number; category_name: string }) => Promise<void>;
   onDeleteTemplate: (id: string) => Promise<void>;
   onAddShoppingCategory: (name: string) => Promise<void>;
   onUpdateShoppingCategory: (id: string, name: string) => Promise<void>;
@@ -1036,7 +1087,7 @@ export function TabAjustes({
   userProfile, categories, expenses, expenseTemplates, shoppingCategories, notificationEmails, merchants, currentDate,
   theme, setTheme, fetchData, showToast,
   onOpenLogs, onSignOut, onAddCategory, onUpdateCategory, onDeleteCategory,
-  onAddTemplate, onDeleteTemplate, onAddShoppingCategory, onUpdateShoppingCategory, onDeleteShoppingCategory,
+  onAddTemplate, onUpdateTemplate, onDeleteTemplate, onAddShoppingCategory, onUpdateShoppingCategory, onDeleteShoppingCategory,
   onAddNotificationEmail, onToggleNotificationEmail, onDeleteNotificationEmail,
   onAddMerchant, onUpdateMerchant, onDeleteMerchant,
 }: Props) {
@@ -1231,6 +1282,7 @@ export function TabAjustes({
                   templates={expenseTemplates}
                   categories={categories}
                   onAdd={onAddTemplate}
+                  onUpdate={onUpdateTemplate}
                   onDelete={onDeleteTemplate}
                   showToast={showToast}
                   fetchData={fetchData}
