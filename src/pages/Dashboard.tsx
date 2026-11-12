@@ -35,7 +35,7 @@ const TabSonhos      = lazy(() => import('../tabs/TabSonhos').then(m      => ({ 
 const TabLogs        = lazy(() => import('../tabs/TabLogs').then(m        => ({ default: m.TabLogs        })));
 const TabRecorrentes = lazy(() => import('../tabs/TabRecorrentes').then(m => ({ default: m.TabRecorrentes })));
 
-import type { Expense, ExpensePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint } from '../types';
+import type { Expense, ExpensePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 
 const RECIPE_BUCKET = 'recipe-images';
@@ -197,8 +197,9 @@ export default function Dashboard() {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses, historyExpenses,
+    aiAnalyses, historyExpenses, studentCard,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
+    fetchStudentCard,
   } = useDashboardData(currentDate, activeTab);
 
   const handleManualRefresh = useCallback(async () => {
@@ -419,6 +420,26 @@ export default function Dashboard() {
     if (error) throw error;
     await fetchMerchants();
   }, [fetchMerchants]);
+
+  // ── Carteirinha estudantil ────────────────────────────────────────────────
+  const saveStudentCard = useCallback(async (payload: StudentCardPayload) => {
+    if (!user) throw new Error('Não autenticado');
+    const { error } = await supabase
+      .from('student_cards')
+      .upsert({ ...payload, user_id: user.id, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (error) throw error;
+    await fetchStudentCard();
+  }, [user, fetchStudentCard]);
+
+  // Mesmo bucket/padrão de nome da foto de perfil (Profile.tsx)
+  const uploadStudentCardPhoto = useCallback(async (file: File): Promise<string> => {
+    if (!user) throw new Error('Não autenticado');
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const filePath = `${user.id}-carteirinha-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('avatars').upload(filePath, file);
+    if (error) throw error;
+    return supabase.storage.from('avatars').getPublicUrl(filePath).data.publicUrl;
+  }, [user]);
 
   // ── Categorias de compras ──────────────────────────────────────────────────
   const addShoppingCategory = useCallback(async (name: string) => {
@@ -1117,7 +1138,10 @@ export default function Dashboard() {
                 merchants={merchants}
                 onAddMerchant={addMerchant}
                 onUpdateMerchant={updateMerchant}
-                onDeleteMerchant={deleteMerchant} />
+                onDeleteMerchant={deleteMerchant}
+                studentCard={studentCard}
+                onSaveStudentCard={saveStudentCard}
+                onUploadStudentCardPhoto={uploadStudentCardPhoto} />
             )}
             {activeTab === 'logs' && (
               <TabLogs logs={logs} onBack={() => setActiveTab('config')} />

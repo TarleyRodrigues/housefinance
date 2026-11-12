@@ -264,6 +264,43 @@ export interface Merchant {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// StudentCard (Carteirinha Estudantil — modelo demonstrativo)
+// Tabela: student_cards (1 linha por usuário, PK = user_id)
+// Campos nulos caem no padrão do perfil (nome/foto) ou ficam em branco.
+// ─────────────────────────────────────────────────────────────────────────────
+export type EducationLevel = 'Ensino Superior' | 'Pós-graduação' | 'Ensino Técnico' | 'Ensino Médio';
+
+export interface StudentCard {
+  user_id: string;
+  full_name: string | null;       // null = usa profiles.full_name
+  photo_url: string | null;       // null = usa profiles.avatar_url
+  cpf: string | null;
+  birth_date: string | null;      // yyyy-MM-dd
+  institution: string | null;
+  course: string | null;
+  education_level: EducationLevel | null;
+  usage_code: string | null;      // null = código gerado a partir do user_id
+  valid_until: string | null;     // yyyy-MM-dd — null = 31/03 do ano seguinte
+  updated_at: string;
+}
+
+export type StudentCardPayload = Omit<StudentCard, 'user_id' | 'updated_at'>;
+
+// Dados já resolvidos (perfil + carteirinha + padrões) prontos para renderizar
+export interface StudentCardView {
+  fullName: string;
+  photoUrl: string | null;
+  cpf: string;
+  birthDate: string;              // yyyy-MM-dd ou ''
+  institution: string;
+  course: string;
+  educationLevel: EducationLevel;
+  usageCode: string;
+  validUntil: string;             // yyyy-MM-dd
+  issuedAt: string;               // ISO — última atualização (ou hoje)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Dream (Sonhos & Objetivos)
 // ─────────────────────────────────────────────────────────────────────────────
 export interface Dream {

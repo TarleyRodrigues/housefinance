@@ -13,6 +13,7 @@ import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
   WatchlistCategory, WatchlistItem, Dream, ExpenseTemplate, RecurringExpense, AIAnalysis,
   ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant, HistoryExpense,
+  StudentCard,
 } from '../types';
 import { HISTORY_MONTHS } from '../utils';
 import type { WatchlistRating } from '../tabs/Tabfilmes';
@@ -61,6 +62,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [notificationEmails, setNotificationEmails]   = useState<NotificationEmail[]>([]);
   const [merchants, setMerchants]                     = useState<Merchant[]>([]);
   const [historyExpenses, setHistoryExpenses]         = useState<HistoryExpense[]>([]);
+  const [studentCard, setStudentCard]                 = useState<StudentCard | null>(null);
   const [isLoading, setIsLoading]                     = useState(true);
   const [error, setError]                             = useState<string | null>(null);
 
@@ -174,6 +176,19 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       .order('name');
     if (!err) setMerchants((data ?? []) as Merchant[]);
   }, []);
+
+  // Carteirinha estudantil do usuário logado (0 ou 1 linha).
+  // Não bloqueia o app se a tabela ainda não existir.
+  const fetchStudentCard = useCallback(async () => {
+    if (!user) return;
+    const { data, error: cardErr } = await supabase
+      .from('student_cards')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (cardErr) { console.error('[useDashboardData] student_cards', cardErr); return; }
+    setStudentCard((data ?? null) as StudentCard | null);
+  }, [user]);
 
   const fetchData = useCallback(async (force = false) => {
     if (force) tabCacheRef.current = {};
@@ -306,6 +321,10 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       // Categorias de compras, e-mails de notificação e estabelecimentos — carregados sempre
       await Promise.all([fetchShoppingCategories(), fetchNotificationEmails(), fetchMerchants()]);
 
+      if (activeTab === 'config') {
+        await fetchStudentCard();
+      }
+
       if (activeTab === 'shopping') {
         await Promise.all([fetchShoppingList(), fetchCatalog(), fetchShoppingHistory()]);
       }
@@ -378,7 +397,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [dates, currentDate, activeTab, user, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants]);
+  }, [dates, currentDate, activeTab, user, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants, fetchStudentCard]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -415,8 +434,9 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses, historyExpenses,
+    aiAnalyses, historyExpenses, studentCard,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
+    fetchStudentCard,
   };
 }

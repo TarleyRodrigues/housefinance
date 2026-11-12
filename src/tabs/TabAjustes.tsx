@@ -9,12 +9,18 @@ import {
   Moon, Sun, LogOut, Plus, Trash2, History,
   Check, AlertTriangle, Download, TrendingUp,
   Calendar, Tag, Users, User, Zap, ChevronDown, ShoppingCart, Bell, Mail, ToggleLeft, ToggleRight,
-  Store, Pencil, Search, Loader2,
+  Store, Pencil, Search, Loader2, IdCard, SlidersHorizontal, ChevronRight,
 } from 'lucide-react';
 import { formatCurrency, handleCurrencyInput, parseAmount } from '../utils';
+import { resolveStudentCard } from '../utils/studentCard';
+import { StudentCardViewer } from '../components/StudentCard';
+import { StudentCardSettings } from '../components/StudentCardSettings';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { Category, Profile, Expense, ExpenseTemplate, ShoppingCategory, NotificationEmail, Merchant } from '../types';
+import type {
+  Category, Profile, Expense, ExpenseTemplate, ShoppingCategory, NotificationEmail, Merchant,
+  StudentCard, StudentCardPayload,
+} from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Paleta de cores
@@ -1078,6 +1084,9 @@ interface Props {
   onAddMerchant: (name: string) => Promise<void>;
   onUpdateMerchant: (id: string, name: string) => Promise<void>;
   onDeleteMerchant: (id: string) => Promise<void>;
+  studentCard: StudentCard | null;
+  onSaveStudentCard: (payload: StudentCardPayload) => Promise<void>;
+  onUploadStudentCardPhoto: (file: File) => Promise<string>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1090,8 +1099,15 @@ export function TabAjustes({
   onAddTemplate, onUpdateTemplate, onDeleteTemplate, onAddShoppingCategory, onUpdateShoppingCategory, onDeleteShoppingCategory,
   onAddNotificationEmail, onToggleNotificationEmail, onDeleteNotificationEmail,
   onAddMerchant, onUpdateMerchant, onDeleteMerchant,
+  studentCard, onSaveStudentCard, onUploadStudentCardPhoto,
 }: Props) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showStudentCard, setShowStudentCard]     = useState(false);
+  const [showCardSettings, setShowCardSettings]   = useState(false);
+  const studentCardView = useMemo(
+    () => resolveStudentCard(studentCard, userProfile, userProfile?.id ?? ''),
+    [studentCard, userProfile],
+  );
   const [openSections, setOpenSections] = useState<{ templates: boolean; categories: boolean; shoppingCategories: boolean; notifications: boolean; merchants: boolean }>({
     templates: false,
     categories: false,
@@ -1224,6 +1240,32 @@ export function TabAjustes({
         >
           <LogOut size={20} />
           <span className="text-[9px] font-black uppercase tracking-widest leading-none">Sair</span>
+        </button>
+      </div>
+
+      {/* ── CARTEIRINHA ESTUDANTIL ── */}
+      <div className="space-y-2">
+        <button onClick={() => setShowStudentCard(true)} aria-label="Abrir carteirinha estudantil"
+          className="w-full min-h-[44px] p-5 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2.5rem] flex items-center gap-4 shadow-lg shadow-blue-600/25 active:scale-95 transition-all text-white relative overflow-hidden"
+        >
+          <div className="absolute -right-6 -bottom-10 w-32 h-32 rounded-full border-[10px] border-fuchsia-400/30 pointer-events-none" />
+          <div className="p-3 bg-white/15 rounded-2xl"><IdCard size={22} /></div>
+          <div className="text-left flex-1 min-w-0">
+            <p className="font-black uppercase tracking-tighter text-sm">Carteirinha</p>
+            <p className="text-[10px] text-white/70 font-black uppercase tracking-widest leading-none mt-1 truncate">
+              {studentCardView.institution || 'Carteira estudantil digital'}
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-white/70" />
+        </button>
+        <button onClick={() => setShowCardSettings(true)} aria-label="Ajustes da carteirinha"
+          className="w-full min-h-[44px] px-5 py-3.5 bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 flex items-center gap-3 shadow-sm active:scale-95 transition-all"
+        >
+          <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+            <SlidersHorizontal size={14} className="text-indigo-500 dark:text-indigo-400" />
+          </div>
+          <p className="flex-1 text-left font-black text-slate-800 dark:text-slate-200 text-xs uppercase tracking-tight">Ajustes da Carteirinha</p>
+          <ChevronRight size={16} className="text-slate-400" />
         </button>
       </div>
 
@@ -1506,6 +1548,21 @@ export function TabAjustes({
         confirmClassName="bg-red-500 shadow-red-500/30"
         onConfirm={handleLogoutConfirm}
         onCancel={() => setShowLogoutConfirm(false)}
+      />
+      <StudentCardViewer
+        isOpen={showStudentCard}
+        data={studentCardView}
+        onClose={() => setShowStudentCard(false)}
+        onEdit={() => { setShowStudentCard(false); setShowCardSettings(true); }}
+      />
+      <StudentCardSettings
+        isOpen={showCardSettings}
+        studentCard={studentCard}
+        userProfile={userProfile}
+        onClose={() => setShowCardSettings(false)}
+        onSave={onSaveStudentCard}
+        onUploadPhoto={onUploadStudentCardPhoto}
+        showToast={showToast}
       />
     </div>
   );
