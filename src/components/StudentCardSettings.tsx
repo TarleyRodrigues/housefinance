@@ -1,5 +1,5 @@
 // ─── AJUSTES DA CARTEIRINHA ──────────────────────────────────────────────────
-// Bottom sheet com formulário + pré-visualização ao vivo da frente do cartão.
+// Tela cheia com formulário + pré-visualização ao vivo da frente do cartão.
 // Começa preenchido com o que já existe no sistema (nome/foto do perfil).
 
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
@@ -127,14 +127,13 @@ export function StudentCardSettings({
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[310] flex items-end justify-center"
-          role="dialog" aria-modal="true" aria-label="Ajustes da carteirinha" onClick={onClose}
+          className="fixed inset-0 bg-slate-50 dark:bg-slate-900 z-[310] flex justify-center"
+          role="dialog" aria-modal="true" aria-label="Ajustes da carteirinha"
         >
           <motion.div
-            initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+            initial={{ x: 40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 40, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="bg-white dark:bg-slate-800 rounded-t-[2rem] w-full max-w-md max-h-[94vh] flex flex-col shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-800 w-full max-w-md h-full flex flex-col"
           >
             {/* Cabeçalho */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-700">

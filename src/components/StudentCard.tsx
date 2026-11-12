@@ -5,7 +5,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, X, Pencil, RefreshCw, ShieldCheck, UserRound, Maximize2, Minimize2 } from 'lucide-react';
+import { GraduationCap, X, RefreshCw, ShieldCheck, UserRound, Maximize2, Minimize2 } from 'lucide-react';
 import type { StudentCardView } from '../types';
 import {
   cardYear, formatDateBR, formatMonthYear, hashString, seededRandom,
@@ -157,7 +157,8 @@ export function StudentCardFront({ data }: { data: StudentCardView }) {
         <FakeQrCode seed={data.usageCode} className="w-[17cqw]" />
         <p className="text-[1.9cqw] font-semibold text-slate-600 mt-[1cqw] leading-none">Cód. de uso</p>
         <p className="text-[2.9cqw] font-black text-slate-900 tracking-wide leading-tight mt-[0.4cqw]">{data.usageCode}</p>
-        <p className="text-[7cqw] font-black italic text-blue-800 leading-none mt-auto tracking-tighter">{cardYear(data.validUntil)}</p>
+        <p style={{ fontFamily: "'Montserrat', 'Arial Black', sans-serif", fontWeight: 900 }}
+          className="text-[7.4cqw] text-blue-800 leading-none mt-auto tracking-[-0.06em]">{cardYear(data.validUntil)}</p>
         <p className="text-[1.8cqw] text-slate-500 mt-[0.8cqw] leading-none">Validade</p>
         <p className="text-[2.2cqw] font-bold text-slate-700 mb-[2cqw] mt-[0.4cqw] leading-none">{formatMonthYear(data.validUntil)}</p>
       </div>
@@ -234,7 +235,6 @@ interface StudentCardViewerProps {
   isOpen: boolean;
   data: StudentCardView;
   onClose: () => void;
-  onEdit: () => void;
 }
 
 const faceStyle = { backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' } as const;
@@ -242,7 +242,7 @@ const faceStyle = { backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hid
 // Modo ampliado: cartão girado 90° ocupando a tela (lado maior = altura útil)
 const ZOOM_LONG_SIDE = 'min(calc(100dvh - 230px), calc((100vw - 32px) * 1.586))';
 
-export function StudentCardViewer({ isOpen, data, onClose, onEdit }: StudentCardViewerProps) {
+export function StudentCardViewer({ isOpen, data, onClose }: StudentCardViewerProps) {
   const [flipped, setFlipped] = useState(false);
   const [zoomed, setZoomed]   = useState(false);
 
@@ -332,10 +332,6 @@ export function StudentCardViewer({ isOpen, data, onClose, onEdit }: StudentCard
                 zoomed ? 'bg-white text-slate-900' : 'bg-white/10 text-white'
               }`}>
               {zoomed ? <Minimize2 size={14} /> : <Maximize2 size={14} />} {zoomed ? 'Reduzir' : 'Ampliar'}
-            </button>
-            <button onClick={onEdit}
-              className="flex-1 min-h-[44px] rounded-2xl bg-blue-600 text-white flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-600/30 active:scale-95 transition-all">
-              <Pencil size={14} /> Ajustes
             </button>
           </div>
         </motion.div>

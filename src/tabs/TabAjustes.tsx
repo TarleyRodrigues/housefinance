@@ -1553,7 +1553,6 @@ export function TabAjustes({
         isOpen={showStudentCard}
         data={studentCardView}
         onClose={() => setShowStudentCard(false)}
-        onEdit={() => { setShowStudentCard(false); setShowCardSettings(true); }}
       />
       <StudentCardSettings
         isOpen={showCardSettings}
