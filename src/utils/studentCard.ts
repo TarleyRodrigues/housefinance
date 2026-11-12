@@ -93,4 +93,5 @@ export const resolveStudentCard = (
   usageCode:      card?.usage_code?.trim() || defaultUsageCode(userId),
   validUntil:     card?.valid_until || defaultValidUntil(),
   issuedAt:       card?.updated_at ?? new Date().toISOString(),
+  showDemoBadge:  card?.show_demo_badge ?? true,
 });

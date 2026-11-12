@@ -281,6 +281,7 @@ export interface StudentCard {
   education_level: EducationLevel | null;
   usage_code: string | null;      // null = código gerado a partir do user_id
   valid_until: string | null;     // yyyy-MM-dd — null = 31/03 do ano seguinte
+  show_demo_badge: boolean | null; // null = mostra o selo "Modelo demonstrativo"
   updated_at: string;
 }
 
@@ -298,6 +299,7 @@ export interface StudentCardView {
   usageCode: string;
   validUntil: string;             // yyyy-MM-dd
   issuedAt: string;               // ISO — última atualização (ou hoje)
+  showDemoBadge: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

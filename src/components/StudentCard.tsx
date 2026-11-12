@@ -3,8 +3,8 @@
 // interno usa unidades `cqw` (container query) — escala igual em qualquer largura.
 // QR Code é fictício: padrão visual determinístico gerado a partir do código de uso.
 
-import { useMemo, useState, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react';
 import { GraduationCap, X, RefreshCw, ShieldCheck, UserRound, Maximize2, Minimize2 } from 'lucide-react';
 import type { StudentCardView } from '../types';
 import {
@@ -75,6 +75,47 @@ function FakeQrCode({ seed, className = '' }: { seed: string; className?: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Ano em destaque — logotipo geométrico desenhado em SVG (traço uniforme,
+// cortes retos, dígitos encaixados com fio branco de separação).
+// Célula de 48 × 56 (y de 6 a 62); funciona para qualquer ano.
+// ─────────────────────────────────────────────────────────────────────────────
+const YEAR_DIGITS: Record<string, ReactNode> = {
+  '0': <circle cx="24" cy="34" r="22.5" />,
+  '1': <path d="M12 21 L30 11.5 V64" />,
+  '2': <path d="M7 28.5 A17 17 0 1 1 37 39.4 L6.5 56.5 H47" />,
+  '3': <><path d="M8.5 17 A15 11.5 0 1 1 22 34.5" /><path d="M22 34.5 A17.5 11 0 1 1 5.5 50.5" /></>,
+  '4': <path d="M34 64 V8 L5 44.5 H49" />,
+  '5': <path d="M44 11.5 H15 L11.5 34 A17.5 13.5 0 1 1 6 52" />,
+  '6': <><circle cx="24" cy="43" r="13.5" /><path d="M11.3 38 L35 0" /></>,
+  '7': <path d="M3 11.5 H45 L17 64" />,
+  '8': <><circle cx="24" cy="20.5" r="9.5" /><circle cx="24" cy="44.5" r="12" /></>,
+  '9': <g transform="rotate(180 24 34)"><circle cx="24" cy="43" r="13.5" /><path d="M11.3 38 L35 0" /></g>,
+};
+const YEAR_ADVANCE = 46;
+const YEAR_STROKE  = 11;
+
+function YearMark({ year, className = '' }: { year: number; className?: string }) {
+  const digits = String(year).split('');
+  const width  = (digits.length - 1) * YEAR_ADVANCE + 52;
+  const clipId = `year-clip-${year}`;
+  return (
+    <svg viewBox={`-4 6 ${width} 56`} className={className} role="img" aria-label={String(year)}>
+      <defs>
+        <clipPath id={clipId}><rect x="-10" y="6" width={width + 20} height="56" /></clipPath>
+      </defs>
+      <g clipPath={`url(#${clipId})`} fill="none" strokeLinejoin="miter" strokeMiterlimit={10}>
+        {digits.map((d, i) => (
+          <g key={i} transform={`translate(${i * YEAR_ADVANCE} 0)`}>
+            <g stroke="#ffffff" strokeWidth={YEAR_STROKE + 5}>{YEAR_DIGITS[d]}</g>
+            <g stroke="#11519b" strokeWidth={YEAR_STROKE}>{YEAR_DIGITS[d]}</g>
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Moldura: define o container (cqw) e a proporção do cartão
 // ─────────────────────────────────────────────────────────────────────────────
 export function CardFrame({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -102,6 +143,10 @@ const DemoBadge = () => (
   </span>
 );
 
+// Nomes longos diminuem a fonte antes de recorrer às reticências
+const nameSize = (name: string) =>
+  name.length > 30 ? 'text-[3.3cqw]' : name.length > 24 ? 'text-[3.8cqw]' : 'text-[4.4cqw]';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FRENTE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,13 +171,15 @@ export function StudentCardFront({ data }: { data: StudentCardView }) {
 
         {/* Nome */}
         <div className="mt-[1.6cqw] max-w-[68cqw]">
-          <DemoBadge />
-          <p className="text-[4.4cqw] font-black text-slate-800 leading-tight truncate mt-[0.8cqw]">{data.fullName}</p>
+          {data.showDemoBadge && <DemoBadge />}
+          <p className={`${nameSize(data.fullName)} font-black text-slate-800 leading-tight truncate ${data.showDemoBadge ? 'mt-[0.8cqw]' : 'mt-[2.4cqw]'}`}>
+            {data.fullName}
+          </p>
         </div>
 
         {/* Foto + dados */}
         <div className="flex gap-[3cqw] mt-[1.2cqw] max-w-[69cqw]">
-          <div className="relative z-10 w-[21cqw] shrink-0 aspect-[3/4] bg-white p-[0.8cqw] shadow-md">
+          <div className="relative w-[21cqw] shrink-0 aspect-[3/4] bg-white p-[0.8cqw] shadow-md">
             {data.photoUrl ? (
               <img src={data.photoUrl} alt={`Foto de ${data.fullName}`} className="w-full h-full object-cover" />
             ) : (
@@ -157,8 +204,7 @@ export function StudentCardFront({ data }: { data: StudentCardView }) {
         <FakeQrCode seed={data.usageCode} className="w-[17cqw]" />
         <p className="text-[1.9cqw] font-semibold text-slate-600 mt-[1cqw] leading-none">Cód. de uso</p>
         <p className="text-[2.9cqw] font-black text-slate-900 tracking-wide leading-tight mt-[0.4cqw]">{data.usageCode}</p>
-        <p style={{ fontFamily: "'Montserrat', 'Arial Black', sans-serif", fontWeight: 900 }}
-          className="text-[7.4cqw] text-blue-800 leading-none mt-auto tracking-[-0.06em]">{cardYear(data.validUntil)}</p>
+        <YearMark year={cardYear(data.validUntil)} className="w-[19cqw] mt-auto" />
         <p className="text-[1.8cqw] text-slate-500 mt-[0.8cqw] leading-none">Validade</p>
         <p className="text-[2.2cqw] font-bold text-slate-700 mb-[2cqw] mt-[0.4cqw] leading-none">{formatMonthYear(data.validUntil)}</p>
       </div>
@@ -172,7 +218,7 @@ export function StudentCardFront({ data }: { data: StudentCardView }) {
 const BackField = ({ label, value }: { label: string; value: string }) => (
   <div className="min-w-0">
     <p className="text-[1.7cqw] font-bold uppercase tracking-wider text-blue-200/70 leading-none">{label}</p>
-    <p className="text-[2.6cqw] font-bold text-white leading-tight truncate mt-[0.5cqw]">{value || '—'}</p>
+    <p className="text-[2.5cqw] font-bold text-white leading-tight line-clamp-2 break-words mt-[0.5cqw]">{value || '—'}</p>
   </div>
 );
 
@@ -220,9 +266,11 @@ export function StudentCardBack({ data }: { data: StudentCardView }) {
           </div>
           <BrandMark light />
         </div>
-        <p className="text-[1.6cqw] text-amber-300 font-bold uppercase tracking-wider mt-[1.4cqw] leading-none">
-          Modelo demonstrativo — sem validade legal
-        </p>
+        {data.showDemoBadge && (
+          <p className="text-[1.6cqw] text-amber-300 font-bold uppercase tracking-wider mt-[1.4cqw] leading-none">
+            Modelo demonstrativo — sem validade legal
+          </p>
+        )}
       </div>
     </div>
   );
@@ -246,23 +294,29 @@ export function StudentCardViewer({ isOpen, data, onClose }: StudentCardViewerPr
   const [flipped, setFlipped] = useState(false);
   const [zoomed, setZoomed]   = useState(false);
 
+  // Giro controlado por motion value: cada face só fica visível na metade do giro
+  // em que está de frente. O Safari do iPhone ignora backface-visibility em
+  // elementos posicionados, e a foto da frente aparecia por cima do verso.
+  const rotate   = useSpring(0, { stiffness: 120, damping: 18 });
+  const frontVis = useTransform(rotate, (r) => (r < 90 ? 'visible' : 'hidden'));
+  const backVis  = useTransform(rotate, (r) => (r >= 90 ? 'visible' : 'hidden'));
+  useEffect(() => { rotate.set(flipped ? 180 : 0); }, [flipped, rotate]);
+
   const card = (
     <CardFrame>
       <motion.button
         type="button"
         onClick={() => setFlipped((f) => !f)}
         aria-label={flipped ? 'Mostrar frente' : 'Mostrar verso'}
-        animate={{ rotateY: flipped ? 180 : 0 }}
-        transition={{ type: 'spring', stiffness: 120, damping: 18 }}
         className="absolute inset-0 text-left"
-        style={{ transformStyle: 'preserve-3d' }}
+        style={{ rotateY: rotate, transformStyle: 'preserve-3d' }}
       >
-        <div className="absolute inset-0" style={faceStyle}>
+        <motion.div className="absolute inset-0" style={{ ...faceStyle, visibility: frontVis }}>
           <StudentCardFront data={data} />
-        </div>
-        <div className="absolute inset-0" style={{ ...faceStyle, transform: 'rotateY(180deg)' }}>
+        </motion.div>
+        <motion.div className="absolute inset-0" style={{ ...faceStyle, visibility: backVis, transform: 'rotateY(180deg)' }}>
           <StudentCardBack data={data} />
-        </div>
+        </motion.div>
       </motion.button>
     </CardFrame>
   );

@@ -31,6 +31,7 @@ const buildForm = (view: StudentCardView, card: StudentCard | null) => ({
   educationLevel: view.educationLevel,
   usageCode:      view.usageCode,
   validUntil:     view.validUntil,
+  showDemoBadge:  view.showDemoBadge,
 });
 
 type CardForm = ReturnType<typeof buildForm>;
@@ -69,6 +70,7 @@ export function StudentCardSettings({
     usageCode:      form.usageCode.trim() || '—',
     validUntil:     form.validUntil || resolveStudentCard(null, null, userId).validUntil,
     issuedAt:       studentCard?.updated_at ?? new Date().toISOString(),
+    showDemoBadge:  form.showDemoBadge,
   }), [form, userProfile, userId, studentCard]);
 
   const handlePhoto = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -105,16 +107,19 @@ export function StudentCardSettings({
         education_level: form.educationLevel,
         usage_code:      form.usageCode.trim().toUpperCase(),
         valid_until:     form.validUntil,
+        show_demo_badge: form.showDemoBadge,
       });
       showToast('Carteirinha atualizada!');
       onClose();
     } catch (err: unknown) {
       console.error('Erro ao salvar carteirinha:', err);
-      const code = (err as { code?: string })?.code;
+      const { code, message } = (err as { code?: string; message?: string }) ?? {};
       showToast(
         code === 'PGRST205' || code === '42P01'
           ? 'Tabela student_cards não existe — rode o SQL no Supabase'
-          : 'Erro ao salvar. Tente novamente.',
+          : code === 'PGRST204' && message?.includes('show_demo_badge')
+            ? 'Falta a coluna show_demo_badge — rode o SQL no Supabase'
+            : 'Erro ao salvar. Tente novamente.',
         'error',
       );
     } finally {
@@ -234,6 +239,21 @@ export function StudentCardSettings({
                     value={form.validUntil} onChange={(e) => patch({ validUntil: e.target.value })} />
                 </div>
               </div>
+
+              {/* Selo "Modelo demonstrativo" */}
+              <button type="button" role="switch" aria-checked={form.showDemoBadge}
+                onClick={() => patch({ showDemoBadge: !form.showDemoBadge })}
+                className="w-full min-h-[44px] p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 text-left active:scale-[0.98] transition-all">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Selo "Modelo demonstrativo"</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                    {form.showDemoBadge ? 'Visível na frente e no verso' : 'Oculto — visual igual ao de produção'}
+                  </p>
+                </div>
+                <span className={`relative w-12 h-7 rounded-full shrink-0 transition-colors ${form.showDemoBadge ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                  <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow transition-transform ${form.showDemoBadge ? 'translate-x-5' : ''}`} />
+                </span>
+              </button>
 
               <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed px-1">
                 QR Code ilustrativo, gerado a partir do código de uso. A integração com a entidade emissora
