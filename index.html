@@ -14,8 +14,20 @@
     <link rel="manifest" href="/housefinance/manifest.json" />
 
     <title>House Finance</title>
-    <script type="module" crossorigin src="/housefinance/assets/index-Clq__YRP.js"></script>
-    <link rel="stylesheet" crossorigin href="/housefinance/assets/index-CP8lG_bB.css">
+
+    <!-- Aplica o tema salvo antes do React montar (evita flash claro e cobre Login/Perfil) -->
+    <script>
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'dark' || t === 'brasil') document.documentElement.classList.add('dark');
+        if (t === 'brasil') document.documentElement.classList.add('brasil');
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/housefinance/assets/index-D-6bi_0H.js"></script>
+    <link rel="modulepreload" crossorigin href="/housefinance/assets/react-D0F1oxSz.js">
+    <link rel="modulepreload" crossorigin href="/housefinance/assets/motion-CETwJGPm.js">
+    <link rel="modulepreload" crossorigin href="/housefinance/assets/supabase-yKjPlrCh.js">
+    <link rel="stylesheet" crossorigin href="/housefinance/assets/index-DsSuCS1d.css">
   </head>
   <body>
     <div id="root"></div>
