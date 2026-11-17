@@ -886,7 +886,7 @@ function CatalogSheet({ catalogItems, allCategoriesExternal, onAdd, onCreate, on
                     const dateObj  = new Date(entry.date);
                     const dateStr  = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
                     return (
-                      <div key={idx} className="flex gap-3 items-start">
+                      <div key={`${entry.date}-${idx}`} className="flex gap-3 items-start">
                         {/* Linha do tempo */}
                         <div className="flex flex-col items-center shrink-0 pt-1">
                           <div className={`w-3 h-3 rounded-full border-2 shrink-0 ${isFirst ? 'border-violet-500 bg-violet-500' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'}`} />

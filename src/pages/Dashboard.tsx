@@ -22,10 +22,6 @@ import { formatCurrency } from '../utils';
 
 import { TabExtrato }   from '../tabs/TabExtrato';
 import { TabNovoGasto } from '../tabs/TabNovoGasto';
-import { TabCompras }   from '../tabs/TabCompras';
-import { TabNotas }     from '../tabs/TabNotas';
-import { TabAvisos }    from '../tabs/TabAvisos';
-import { TabAjustes }   from '../tabs/TabAjustes';
 import { TabHome }      from '../tabs/TabHome';
 
 const TabGraficos    = lazy(() => import('../tabs/TabGraficos').then(m    => ({ default: m.TabGraficos    })));
@@ -34,8 +30,12 @@ const TabReceitas    = lazy(() => import('../tabs/TabReceitas').then(m    => ({ 
 const TabSonhos      = lazy(() => import('../tabs/TabSonhos').then(m      => ({ default: m.TabSonhos      })));
 const TabLogs        = lazy(() => import('../tabs/TabLogs').then(m        => ({ default: m.TabLogs        })));
 const TabRecorrentes = lazy(() => import('../tabs/TabRecorrentes').then(m => ({ default: m.TabRecorrentes })));
+const TabCompras     = lazy(() => import('../tabs/TabCompras').then(m     => ({ default: m.TabCompras     })));
+const TabNotas       = lazy(() => import('../tabs/TabNotas').then(m       => ({ default: m.TabNotas       })));
+const TabAvisos      = lazy(() => import('../tabs/TabAvisos').then(m      => ({ default: m.TabAvisos      })));
+const TabAjustes     = lazy(() => import('../tabs/TabAjustes').then(m     => ({ default: m.TabAjustes     })));
 
-import type { Expense, ExpensePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
+import type { Expense, ExpensePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 
 const RECIPE_BUCKET = 'recipe-images';
@@ -152,11 +152,15 @@ export default function Dashboard() {
   const isDark   = theme !== 'light';
   const isBrasil = theme === 'brasil';
 
-  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
+  const [toast, setToast] = useState<{ id: number; msg: string; type: string } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showToast = useCallback((msg: string, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    // Cancela o timer do toast anterior para o novo não sumir antes da hora
+    clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), msg, type });
+    toastTimer.current = setTimeout(() => setToast(null), type === 'error' ? 4500 : 3000);
   }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const [editingExpense, setEditingExpense]     = useState<Expense | null>(null);
   const [duplicatingExpense, setDuplicatingExpense] = useState<Expense | null>(null);
@@ -199,7 +203,7 @@ export default function Dashboard() {
     recipes, dreams, expenseTemplates, recurringExpenses,
     aiAnalyses, historyExpenses, studentCard,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard,
+    fetchStudentCard, fetchNotes,
   } = useDashboardData(currentDate, activeTab);
 
   const handleManualRefresh = useCallback(async () => {
@@ -821,6 +825,37 @@ export default function Dashboard() {
     fetchData(true);
   }, [user, fetchData]);
 
+  // ── Notas ─────────────────────────────────────────────────────────────────
+  const saveNote = useCallback(async (payload: NotePayload, id: string | null) => {
+    if (!user) throw new Error('Não autenticado');
+    const { error } = id
+      ? await supabase.from('notes').update(payload).eq('id', id)
+      : await supabase.from('notes').insert({ ...payload, user_id: user.id });
+    if (error) throw error;
+    await fetchNotes();
+  }, [user, fetchNotes]);
+
+  const deleteNote = useCallback(async (id: string) => {
+    const { error } = await supabase.from('notes').delete().eq('id', id);
+    if (error) throw error;
+    await fetchNotes();
+  }, [fetchNotes]);
+
+  // ── Imagem de sonho (bucket dream-images, leitura pública) ────────────────
+  // Path: {userId}/{slug}.{ext} — no modo edição o slug é o id do sonho
+  const uploadDreamImage = useCallback(async (file: File, slug: string): Promise<string> => {
+    if (!user) throw new Error('Não autenticado');
+    const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const path = `${user.id}/${slug}.${ext}`;
+    const { error } = await supabase.storage
+      .from('dream-images')
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (error) throw new Error(`Erro no upload: ${error.message}`);
+    const { data } = supabase.storage.from('dream-images').getPublicUrl(path);
+    // Cache-buster para forçar reload da imagem após substituição
+    return `${data.publicUrl}?t=${Date.now()}`;
+  }, [user]);
+
   // ── Receitas ──────────────────────────────────────────────────────────────
   const uploadRecipeImage = useCallback(async (file: File, recipeId: string): Promise<string> => {
     const ext = file.name.split('.').pop() ?? 'jpg';
@@ -990,7 +1025,7 @@ export default function Dashboard() {
     >
 
       <AnimatePresence>
-        {toast && <Toast message={toast.msg} type={toast.type} />}
+        {toast && <Toast key={toast.id} message={toast.msg} type={toast.type} />}
       </AnimatePresence>
 
       {/* Pull-to-refresh indicator */}
@@ -1105,7 +1140,7 @@ export default function Dashboard() {
                 onRenameItem={renameShoppingItem} />
             )}
             {activeTab === 'notes' && (
-              <TabNotas notes={notes} fetchData={fetchData} showToast={showToast} />
+              <TabNotas notes={notes} showToast={showToast} onSaveNote={saveNote} onDeleteNote={deleteNote} />
             )}
             {activeTab === 'reminders' && (
               <TabAvisos reminders={reminders} fetchData={fetchData} showToast={showToast}
@@ -1167,7 +1202,7 @@ export default function Dashboard() {
             )}
             {activeTab === 'dreams' && (
               <TabSonhos dreams={dreams} expenses={expenses} fetchData={fetchData}
-                showToast={showToast} userId={user?.id ?? ''} onAddDream={addDream}
+                showToast={showToast} onUploadImage={uploadDreamImage} onAddDream={addDream}
                 onUpdateDream={updateDream} onCompleteDream={completeDream}
                 onDeleteDream={deleteDream} onQuickSave={quickSaveDream} />
             )}
@@ -1202,7 +1237,7 @@ export default function Dashboard() {
               <X size={32} />
             </button>
             <div className="flex-1 flex items-center justify-center">
-              <img src={viewingReceipt} className="max-w-full max-h-[85vh] rounded-3xl object-contain border border-white/10 shadow-2xl" alt="Comprovante da despesa" />
+              <img loading="lazy" decoding="async" src={viewingReceipt} className="max-w-full max-h-[85vh] rounded-3xl object-contain border border-white/10 shadow-2xl" alt="Comprovante da despesa" />
             </div>
             <p className="text-center text-white/50 text-[10px] font-black uppercase tracking-[0.4em] mt-6">
               DOCUMENTO SALVO NO SUPABASE

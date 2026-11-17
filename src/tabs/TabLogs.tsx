@@ -2,8 +2,14 @@ import { motion } from 'motion/react';
 import { History, Plus, Edit, Trash2, ArrowLeft, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import type { Log } from '../types';
 
-export function TabLogs({ logs, onBack }: { logs: any[], onBack: () => void }) {
+interface Props {
+  logs: Log[];
+  onBack: () => void;
+}
+
+export function TabLogs({ logs, onBack }: Props) {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Botão Voltar */}

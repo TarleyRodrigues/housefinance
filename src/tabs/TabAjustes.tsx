@@ -1164,7 +1164,7 @@ export function TabAjustes({
         <div className="absolute -left-8 -bottom-12 w-36 h-36 bg-blue-500/10 rounded-full pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center gap-4 mb-5">
-            <img
+            <img loading="lazy" decoding="async"
               src={userProfile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile?.full_name ?? 'U')}&background=3b82f6&color=fff`}
               className="w-16 h-16 rounded-2xl border-2 border-white/10 shadow-lg object-cover"
               alt={`Foto de ${userProfile?.full_name ?? 'perfil'}`}

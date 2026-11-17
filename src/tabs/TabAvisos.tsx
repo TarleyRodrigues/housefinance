@@ -538,7 +538,7 @@ export function TabAvisos({ reminders, fetchData, showToast, onSave, onDelete }:
             const hasReminder = reminderDateSet.has(format(day, 'yyyy-MM-dd'));
             return (
               <div
-                key={i}
+                key={day.toISOString()}
                 className={`flex flex-col items-center min-w-[45px] py-3 rounded-2xl transition-all snap-center border ${
                   isHoje
                     ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-200 dark:shadow-none text-white'

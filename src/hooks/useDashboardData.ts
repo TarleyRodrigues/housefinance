@@ -13,20 +13,18 @@ import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
   WatchlistCategory, WatchlistItem, Dream, ExpenseTemplate, RecurringExpense, AIAnalysis,
   ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant, HistoryExpense,
-  StudentCard,
+  StudentCard, Log,
 } from '../types';
 import { HISTORY_MONTHS } from '../utils';
 import type { WatchlistRating } from '../tabs/Tabfilmes';
 import type { Recipe } from '../tabs/TabReceitas';
 
-export interface Log {
-  id: string;
-  created_at: string;
-  action: string;
-  details?: string;
-  user_id: string;
-  profiles?: { full_name?: string; avatar_url?: string };
-}
+export type { Log } from '../types';
+
+const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// Abas que têm dados próprios (carregados ao abrir a aba)
+const TABS_WITH_DATA = new Set(['notes', 'logs', 'movies', 'recipes', 'stats', 'shopping', 'config']);
 
 function normalizeProfiles<T extends { profiles?: unknown }>(rows: T[]): T[] {
   return rows.map((row) => ({
@@ -190,243 +188,243 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     setStudentCard((data ?? null) as StudentCard | null);
   }, [user]);
 
-  const fetchData = useCallback(async (force = false) => {
-    if (force) tabCacheRef.current = {};
-    setIsLoading(true);
-    setError(null);
-    try {
-      // 1. Categorias
-      const { data: cats, error: catsErr } = await supabase
-        .from('categories')
-        .select('id, name, monthly_goal, color, type')
-        .order('name');
-      if (catsErr) throw catsErr;
-      if (cats) setCategories(cats as Category[]);
+  // ── Notas (públicas + privadas do próprio usuário) ──────────────────────────
+  const fetchNotes = useCallback(async () => {
+    if (!user) return;
+    const { data: n, error: notesErr } = await supabase
+      .from('notes')
+      .select('*, profiles(full_name, avatar_url)')
+      .or(`is_private.eq.false,and(is_private.eq.true,user_id.eq.${user.id})`)
+      .order('created_at', { ascending: false });
+    if (notesErr) throw notesErr;
+    setNotes(normalizeProfiles((n ?? []) as unknown as Note[]));
+    tabCacheRef.current['notes'] = Date.now();
+  }, [user]);
 
-      // 2. Perfil
-      if (user) {
-        const { data: profile, error: profileErr } = await supabase
-          .from('profiles').select('id, full_name, avatar_url').eq('id', user.id).single();
-        if (profileErr && profileErr.code !== 'PGRST116') throw profileErr;
-        if (profile) setUserProfile(profile as Profile);
-      }
+  const fetchLogs = useCallback(async () => {
+    const { data: logData, error: logsErr } = await supabase
+      .from('logs').select('*, profiles(full_name, avatar_url)')
+      .order('created_at', { ascending: false }).limit(100);
+    if (logsErr) throw logsErr;
+    setLogs(normalizeProfiles((logData ?? []) as unknown as Log[]));
+    tabCacheRef.current['logs'] = Date.now();
+  }, []);
 
-      // 3. Gastos mês anterior — mês efetivo: payment_month OU expense_date
-      const prevFilter = `payment_month.eq.${dates.prevMonthStr},and(payment_month.is.null,expense_date.gte.${dates.startPrevDate},expense_date.lte.${dates.endPrevDate})`;
-      const { data: prevExps, error: prevErr } = await supabase
-        .from('expenses')
+  const fetchWatchlist = useCallback(async () => {
+    const [cRes, iRes, rRes] = await Promise.all([
+      supabase.from('watchlist_categories').select('*').order('created_at', { ascending: true }),
+      supabase.from('watchlist_items').select('*').order('created_at', { ascending: false }),
+      supabase.from('watchlist_ratings').select('id, item_id, user_id, rating, profiles(full_name, avatar_url)'),
+    ]);
+    if (cRes.error) throw cRes.error;
+    if (iRes.error) throw iRes.error;
+    if (rRes.error) throw rRes.error;
+    setWatchlistCategories((cRes.data ?? []) as WatchlistCategory[]);
+    setWatchlistItems((iRes.data ?? []) as WatchlistItem[]);
+    // Mapeia profiles (array/objeto da resposta) → profile (chave esperada pela interface)
+    setWatchlistRatings(((rRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+      id:      r.id as string,
+      item_id: r.item_id as string,
+      user_id: r.user_id as string,
+      rating:  r.rating as number,
+      profile: Array.isArray(r.profiles) ? (r.profiles[0] ?? undefined) : (r.profiles ?? undefined),
+    })) as WatchlistRating[]);
+    tabCacheRef.current['movies'] = Date.now();
+  }, []);
+
+  // Histórico de 12 meses (até o mês selecionado) — usado em Gráficos › Histórico
+  const fetchHistory = useCallback(async () => {
+    const histStart = startOfMonth(subMonths(currentDate, HISTORY_MONTHS - 1));
+    const histStartStr = format(histStart, 'yyyy-MM');
+    const histFilter = `payment_month.gte.${histStartStr},and(payment_month.is.null,expense_date.gte.${format(histStart, 'yyyy-MM-dd')})`;
+    const { data: hist, error: histErr } = await supabase
+      .from('expenses')
+      .select('id, amount, category_name, description, merchant, expense_date, payment_month, created_at')
+      .eq('is_deleted', false)
+      .or(histFilter)
+      .order('expense_date', { ascending: false })
+      .limit(5000);
+    if (histErr) throw histErr;
+    // Corta no mês selecionado (mês efetivo = payment_month ou mês de expense_date)
+    setHistoryExpenses(((hist ?? []) as HistoryExpense[]).filter((e) => {
+      const m = e.payment_month ?? e.expense_date?.slice(0, 7) ?? '';
+      return m >= histStartStr && m <= dates.monthStr;
+    }));
+    tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
+  }, [currentDate, dates.monthStr]);
+
+  // ── Núcleo: dados usados em várias abas — todas as consultas em paralelo ────
+  // Recarrega ao trocar de mês, após mutações e em eventos realtime;
+  // NÃO roda ao trocar de aba.
+  const fetchCore = useCallback(async () => {
+    const prevFilter = `payment_month.eq.${dates.prevMonthStr},and(payment_month.is.null,expense_date.gte.${dates.startPrevDate},expense_date.lte.${dates.endPrevDate})`;
+    const currFilter = `payment_month.eq.${dates.monthStr},and(payment_month.is.null,expense_date.gte.${dates.startMDate},expense_date.lte.${dates.endMDate})`;
+    // Lembretes: início do mês real até +2 meses à frente
+    const today    = new Date();
+    const remStart = format(startOfMonth(today), 'yyyy-MM-dd');
+    const remEnd   = format(endOfMonth(addMonths(today, 2)), 'yyyy-MM-dd');
+
+    const [
+      catsRes, profileRes, prevRes, currRes, annRes, dreamsRes,
+      tplRes, recRes, analysesRes, remRes,
+    ] = await Promise.all([
+      supabase.from('categories').select('id, name, monthly_goal, color, type').order('name'),
+      user
+        ? supabase.from('profiles').select('id, full_name, avatar_url').eq('id', user.id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      // Mês anterior — mês efetivo: payment_month OU expense_date
+      supabase.from('expenses')
         .select('id, amount, category_name, user_id, created_at, expense_date, payment_month, is_deleted, profiles(full_name, avatar_url)')
-        .eq('is_deleted', false)
-        .or(prevFilter);
-      if (prevErr) throw prevErr;
-      const pExps = normalizeProfiles((prevExps ?? []) as unknown as Expense[]);
-      setPrevMonthExpenses(pExps);
-      setPrevMonthTotal(pExps.reduce((acc, e) => acc + Number(e.amount), 0));
-
-      // 4. Gastos mês atual — mês efetivo: payment_month OU expense_date
-      const currFilter = `payment_month.eq.${dates.monthStr},and(payment_month.is.null,expense_date.gte.${dates.startMDate},expense_date.lte.${dates.endMDate})`;
-      const { data: exps, error: expsErr } = await supabase
-        .from('expenses')
+        .eq('is_deleted', false).or(prevFilter),
+      // Mês atual
+      supabase.from('expenses')
         .select('*, profiles(full_name, avatar_url)')
-        .eq('is_deleted', false)
-        .or(currFilter)
+        .eq('is_deleted', false).or(currFilter)
         .order('expense_date', { ascending: false })
-        .order('created_at', { ascending: false });
-      if (expsErr) throw expsErr;
-      setExpenses(normalizeProfiles((exps ?? []) as unknown as Expense[]));
-
-      // 5. Gráfico anual — mês efetivo considera payment_month quando disponível
-      const { data: ann, error: annErr } = await supabase
-        .from('expenses').select('amount, expense_date, payment_month')
+        .order('created_at', { ascending: false }),
+      // Gráfico anual
+      supabase.from('expenses').select('amount, expense_date, payment_month')
         .eq('is_deleted', false)
         .gte('expense_date', dates.startYDate)
-        .lte('expense_date', dates.endYDate);
-      if (annErr) throw annErr;
-      const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-      setAnnualChartData(months.map((m, i) => ({
-        name: m,
-        total: (ann ?? [])
-          .filter((e) => {
-            // Usa payment_month se definido, senão usa expense_date
-            const rec = e as { payment_month?: string; expense_date: string };
-            const effectiveDate = rec.payment_month
-              ? rec.payment_month + '-01'
-              : rec.expense_date;
-            const monthIdx = parseInt(effectiveDate.split('-')[1], 10) - 1;
-            return monthIdx === i;
-          })
-          .reduce((acc, e) => acc + Number(e.amount), 0),
-      })));
+        .lte('expense_date', dates.endYDate),
+      supabase.from('dreams').select('*').order('created_at', { ascending: false }),
+      supabase.from('expense_templates').select('*').order('description'),
+      supabase.from('recurring_expenses').select('*').order('created_at', { ascending: false }),
+      supabase.from('ai_analyses').select('*').order('month', { ascending: false }),
+      supabase.from('reminders').select('*, profiles(full_name, avatar_url)')
+        .gte('reminder_date', remStart).lte('reminder_date', remEnd)
+        .order('reminder_date', { ascending: true }),
+      // Leves e usados em várias abas — erros tratados dentro de cada função
+      fetchShoppingCategories(), fetchNotificationEmails(), fetchMerchants(),
+    ]);
 
-      // 6. Sonhos
-      const { data: dData, error: dErr } = await supabase
-        .from('dreams').select('*').order('created_at', { ascending: false });
-      if (dErr) throw dErr;
-      setDreams((dData ?? []) as Dream[]);
+    // Essenciais: erro interrompe e aparece para o usuário
+    for (const r of [catsRes, profileRes, prevRes, currRes, annRes, dreamsRes, recRes, remRes]) {
+      if (r.error) throw r.error;
+    }
 
-      // 7. Templates de gastos padrão — sempre carregado (usado na aba 'add')
-      // Não bloqueia o resto do app se falhar (ex: RLS/tabela ausente)
-      {
-        const { data: tpl, error: tplErr } = await supabase
-          .from('expense_templates')
-          .select('*')
-          .order('description');
-        if (tplErr) console.error('[useDashboardData] expense_templates', tplErr);
-        else setExpenseTemplates((tpl ?? []) as ExpenseTemplate[]);
-      }
+    setCategories((catsRes.data ?? []) as Category[]);
+    if (profileRes.data) setUserProfile(profileRes.data as Profile);
 
-      // 8. Gastos recorrentes — sempre carregado (badge + home + aba recurrent)
-      const { data: recData, error: recErr } = await supabase
-        .from('recurring_expenses').select('*').order('created_at', { ascending: false });
-      if (recErr) throw recErr;
-      setRecurringExpenses((recData ?? []) as RecurringExpense[]);
+    const pExps = normalizeProfiles((prevRes.data ?? []) as unknown as Expense[]);
+    setPrevMonthExpenses(pExps);
+    setPrevMonthTotal(pExps.reduce((acc, e) => acc + Number(e.amount), 0));
+    setExpenses(normalizeProfiles((currRes.data ?? []) as unknown as Expense[]));
 
-      // 8b. Análises Gemini salvas — silencia erro se a tabela ainda não existir
-      {
-        const { data: analyses, error: analysesErr } = await supabase
-          .from('ai_analyses')
-          .select('*')
-          .order('month', { ascending: false });
-        if (!analysesErr) setAiAnalyses((analyses ?? []) as AIAnalysis[]);
-      }
+    // Mês efetivo considera payment_month quando disponível — soma em uma passada
+    const totals = new Array<number>(12).fill(0);
+    for (const e of (annRes.data ?? []) as { amount: number; expense_date: string; payment_month?: string | null }[]) {
+      const effective = e.payment_month ? `${e.payment_month}-01` : e.expense_date;
+      const idx = parseInt(effective?.split('-')[1] ?? '', 10) - 1;
+      if (idx >= 0 && idx < 12) totals[idx] += Number(e.amount);
+    }
+    setAnnualChartData(MONTH_LABELS.map((name, i) => ({ name, total: totals[i] })));
 
-      // 9. Lembretes — sempre carregados (badge + home tab + aba avisos)
-      // range: início do mês real até +2 meses à frente
-      {
-        const today = new Date();
-        const remStart = format(startOfMonth(today), 'yyyy-MM-dd');
-        const remEnd   = format(endOfMonth(addMonths(today, 2)), 'yyyy-MM-dd');
-        const { data: r, error: remErr } = await supabase
-          .from('reminders').select('*, profiles(full_name, avatar_url)')
-          .gte('reminder_date', remStart)
-          .lte('reminder_date', remEnd)
-          .order('reminder_date', { ascending: true });
-        if (remErr) throw remErr;
-        setReminders(normalizeProfiles((r ?? []) as unknown as Reminder[]));
-      }
+    setDreams((dreamsRes.data ?? []) as Dream[]);
+    setRecurringExpenses((recRes.data ?? []) as RecurringExpense[]);
+    setReminders(normalizeProfiles((remRes.data ?? []) as unknown as Reminder[]));
 
-      // 10. Lazy por aba — com TTL de 5 min (evita re-fetch ao voltar para a mesma aba)
-      if (activeTab === 'notes' && isTabStale('notes')) {
-        // Busca notas públicas + notas privadas do próprio usuário
-        const { data: n, error: notesErr } = await supabase
-          .from('notes')
-          .select('*, profiles(full_name, avatar_url)')
-          .or(`is_private.eq.false,and(is_private.eq.true,user_id.eq.${user?.id})`)
-          .order('created_at', { ascending: false });
-        if (notesErr) throw notesErr;
-        setNotes(normalizeProfiles((n ?? []) as unknown as Note[]));
-        tabCacheRef.current['notes'] = Date.now();
-      }
+    // Opcionais: não bloqueiam o app se a tabela não existir / RLS
+    if (tplRes.error) console.error('[useDashboardData] expense_templates', tplRes.error);
+    else setExpenseTemplates((tplRes.data ?? []) as ExpenseTemplate[]);
+    if (!analysesRes.error) setAiAnalyses((analysesRes.data ?? []) as AIAnalysis[]);
+  }, [dates, user, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants]);
 
-      // Categorias de compras, e-mails de notificação e estabelecimentos — carregados sempre
-      await Promise.all([fetchShoppingCategories(), fetchNotificationEmails(), fetchMerchants()]);
+  // ── Dados específicos de cada aba (TTL de 5 min nos mais pesados) ──────────
+  const fetchTab = useCallback(async (tab: string): Promise<void> => {
+    switch (tab) {
+      case 'notes':    if (isTabStale('notes'))  await fetchNotes(); break;
+      case 'logs':     if (isTabStale('logs'))   await fetchLogs(); break;
+      case 'movies':   if (isTabStale('movies')) await fetchWatchlist(); break;
+      case 'recipes':
+        if (isTabStale('recipes')) { await fetchRecipes(); tabCacheRef.current['recipes'] = Date.now(); }
+        break;
+      case 'stats':    if (isTabStale(`history-${dates.monthStr}`)) await fetchHistory(); break;
+      case 'shopping': await Promise.all([fetchShoppingList(), fetchCatalog(), fetchShoppingHistory()]); break;
+      case 'config':   await fetchStudentCard(); break;
+    }
+  }, [isTabStale, dates.monthStr, fetchNotes, fetchLogs, fetchWatchlist, fetchRecipes, fetchHistory,
+      fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchStudentCard]);
 
-      if (activeTab === 'config') {
-        await fetchStudentCard();
-      }
-
-      if (activeTab === 'shopping') {
-        await Promise.all([fetchShoppingList(), fetchCatalog(), fetchShoppingHistory()]);
-      }
-
-      if (activeTab === 'logs' && isTabStale('logs')) {
-        const { data: logData, error: logsErr } = await supabase
-          .from('logs').select('*, profiles(full_name, avatar_url)')
-          .order('created_at', { ascending: false }).limit(100);
-        if (logsErr) throw logsErr;
-        setLogs(normalizeProfiles((logData ?? []) as unknown as Log[]));
-        tabCacheRef.current['logs'] = Date.now();
-      }
-
-      if (activeTab === 'movies' && isTabStale('movies')) {
-        const { data: wCats, error: wCatsErr } = await supabase
-          .from('watchlist_categories').select('*').order('created_at', { ascending: true });
-        if (wCatsErr) throw wCatsErr;
-        setWatchlistCategories((wCats ?? []) as WatchlistCategory[]);
-
-        const { data: wItems, error: wItemsErr } = await supabase
-          .from('watchlist_items').select('*').order('created_at', { ascending: false });
-        if (wItemsErr) throw wItemsErr;
-        setWatchlistItems((wItems ?? []) as WatchlistItem[]);
-
-        const { data: wRatings, error: wRatingsErr } = await supabase
-          .from('watchlist_ratings').select('id, item_id, user_id, rating, profiles(full_name, avatar_url)');
-        if (wRatingsErr) throw wRatingsErr;
-        // Mapeia profiles (array/objeto da resposta) → profile (chave esperada pela interface)
-        const normalizedRatings = ((wRatings ?? []) as Record<string, unknown>[]).map(r => ({
-          id:      r.id as string,
-          item_id: r.item_id as string,
-          user_id: r.user_id as string,
-          rating:  r.rating as number,
-          profile: Array.isArray(r.profiles) ? (r.profiles[0] ?? undefined) : (r.profiles ?? undefined),
-        }));
-        setWatchlistRatings(normalizedRatings as WatchlistRating[]);
-        tabCacheRef.current['movies'] = Date.now();
-      }
-
-      // Histórico de 12 meses (até o mês selecionado) — usado em Gráficos › Histórico
-      if (activeTab === 'stats' && isTabStale(`history-${dates.monthStr}`)) {
-        const histStart = startOfMonth(subMonths(currentDate, HISTORY_MONTHS - 1));
-        const histStartStr = format(histStart, 'yyyy-MM');
-        const histFilter = `payment_month.gte.${histStartStr},and(payment_month.is.null,expense_date.gte.${format(histStart, 'yyyy-MM-dd')})`;
-        const { data: hist, error: histErr } = await supabase
-          .from('expenses')
-          .select('id, amount, category_name, description, merchant, expense_date, payment_month, created_at')
-          .eq('is_deleted', false)
-          .or(histFilter)
-          .order('expense_date', { ascending: false })
-          .limit(5000);
-        if (histErr) throw histErr;
-        // Corta no mês selecionado (mês efetivo = payment_month ou mês de expense_date)
-        setHistoryExpenses(((hist ?? []) as HistoryExpense[]).filter((e) => {
-          const m = e.payment_month ?? e.expense_date?.slice(0, 7) ?? '';
-          return m >= histStartStr && m <= dates.monthStr;
-        }));
-        tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
-      }
-
-      if (activeTab === 'recipes' && isTabStale('recipes')) {
-        await fetchRecipes();
-        tabCacheRef.current['recipes'] = Date.now();
-      }
-
+  // Contador de cargas em andamento → isLoading (cargas sobrepostas não "piscam")
+  const pendingRef = useRef(0);
+  const track = useCallback(async (job: () => Promise<unknown>) => {
+    pendingRef.current += 1;
+    setIsLoading(true);
+    try {
+      await job();
+      setError(null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Erro ao carregar dados';
       console.error('[useDashboardData]', e);
       setError(msg);
     } finally {
-      setIsLoading(false);
+      pendingRef.current -= 1;
+      if (pendingRef.current === 0) setIsLoading(false);
     }
-  }, [dates, currentDate, activeTab, user, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants, fetchStudentCard]);
+  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
 
-  // Realtime: re-fetch quando parceiro(a) insere/atualiza/deleta gastos ou lista de compras
+  // Recarga completa (núcleo + aba atual). force = ignora o cache das abas.
+  const fetchData = useCallback(async (force = false) => {
+    if (force) tabCacheRef.current = {};
+    await track(() => Promise.all([fetchCore(), fetchTab(activeTabRef.current)]));
+  }, [track, fetchCore, fetchTab]);
+
+  // Núcleo: na montagem e quando muda o mês/usuário
+  useEffect(() => { track(fetchCore); }, [track, fetchCore]);
+
+  // Aba: ao trocar de aba (e de mês, por causa do histórico em Gráficos)
+  useEffect(() => {
+    if (TABS_WITH_DATA.has(activeTab)) track(() => fetchTab(activeTab));
+  }, [activeTab, fetchTab, track]);
+
+  // Realtime: parceiro(a) inseriu/atualizou/deletou gastos ou itens da lista de compras.
+  // Ref evita recriar o canal a cada troca de mês.
+  const realtimeRef = useRef({ fetchCore, fetchShoppingList, fetchHistory, track });
+  realtimeRef.current = { fetchCore, fetchShoppingList, fetchHistory, track };
+
   useEffect(() => {
     if (!user) return;
 
-    // Debounce para não disparar fetchData múltiplas vezes em cascata
-    let timer: ReturnType<typeof setTimeout>;
-    const refresh = () => {
+    // Debounce para não disparar várias recargas em cascata
+    let expTimer: ReturnType<typeof setTimeout>;
+    let shopTimer: ReturnType<typeof setTimeout>;
+
+    const onExpenses = () => {
       // Gastos mudaram: invalida o cache do histórico
       for (const key of Object.keys(tabCacheRef.current)) {
         if (key.startsWith('history-')) delete tabCacheRef.current[key];
       }
-      clearTimeout(timer);
-      timer = setTimeout(() => fetchData(), 800);
+      clearTimeout(expTimer);
+      expTimer = setTimeout(() => {
+        const { fetchCore: core, fetchHistory: hist, track: run } = realtimeRef.current;
+        run(() => Promise.all([core(), activeTabRef.current === 'stats' ? hist() : null]));
+      }, 800);
+    };
+
+    const onShopping = () => {
+      clearTimeout(shopTimer);
+      shopTimer = setTimeout(() => {
+        const { fetchShoppingList: shop, track: run } = realtimeRef.current;
+        run(shop);
+      }, 800);
     };
 
     const channel = supabase
       .channel('housefinance-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_list' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, onExpenses)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_list' }, onShopping)
       .subscribe();
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(expTimer);
+      clearTimeout(shopTimer);
       supabase.removeChannel(channel);
     };
-  }, [user, fetchData]);
+  }, [user]);
 
   return {
     expenses, prevMonthExpenses, prevMonthTotal,
@@ -437,6 +435,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     aiAnalyses, historyExpenses, studentCard,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard,
+    fetchStudentCard, fetchNotes,
   };
 }

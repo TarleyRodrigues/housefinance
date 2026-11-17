@@ -804,7 +804,7 @@ export function TabReceitas({
                         )}
                       </div>
                       {recipe.profile?.avatar_url && (
-                        <img src={recipe.profile.avatar_url} alt={recipe.profile.full_name ?? ''} className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-600" />
+                        <img loading="lazy" decoding="async" src={recipe.profile.avatar_url} alt={recipe.profile.full_name ?? ''} className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-600" />
                       )}
                     </div>
                   </div>
@@ -853,7 +853,7 @@ export function TabReceitas({
             <div className="flex-1 overflow-y-auto">
               <div className="relative">
                 {selected.image_url ? (
-                  <img src={selected.image_url} className="w-full h-56 object-cover" alt={selected.title} />
+                  <img loading="lazy" decoding="async" src={selected.image_url} className="w-full h-56 object-cover" alt={selected.title} />
                 ) : (
                   <div className="w-full h-40 bg-orange-50 dark:bg-slate-800 flex items-center justify-center">
                     <ChefHat size={48} className="text-orange-200 dark:text-slate-600" />
@@ -867,7 +867,7 @@ export function TabReceitas({
                 {/* Quem cadastrou */}
                 {selected.profile?.full_name && (
                   <div className="flex items-center gap-2">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={selected.profile.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(selected.profile.full_name)}`}
                       alt={selected.profile.full_name}
                       className="w-7 h-7 rounded-full object-cover border-2 border-orange-200"
@@ -996,7 +996,7 @@ export function TabReceitas({
                   className="w-full aspect-video rounded-[1.5rem] overflow-hidden border-2 border-dashed border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/10 flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition-all"
                 >
                   {formImagePreview ? (
-                    <img src={formImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src={formImagePreview} alt="Preview" className="w-full h-full object-cover" />
                   ) : (
                     <>
                       <Camera size={28} className="text-orange-300 dark:text-orange-700" />

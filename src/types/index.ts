@@ -123,6 +123,22 @@ export interface Note {
   profiles?: Profile;
 }
 
+// Payload de criação/edição de nota (TabNotas → Dashboard)
+export type NotePayload = Pick<Note, 'title' | 'content' | 'color'> & { is_private: boolean };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Log (trilha de auditoria)
+// ─────────────────────────────────────────────────────────────────────────────
+export interface Log {
+  id: string;
+  created_at: string;
+  action: string;           // 'INSERT' | 'UPDATE' | 'DELETE'
+  item_description?: string;
+  details?: string;
+  user_id: string;
+  profiles?: { full_name?: string; avatar_url?: string };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // UI
 // ─────────────────────────────────────────────────────────────────────────────

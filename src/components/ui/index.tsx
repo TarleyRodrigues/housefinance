@@ -1,24 +1,32 @@
 // ─── COMPONENTES DE UI REUTILIZÁVEIS ─────────────────────────────────────────
 
 import { motion } from 'motion/react';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, type LucideIcon } from 'lucide-react';
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
-export const Toast = ({ message, type }: { message: string; type: string }) => (
-  <motion.div
-    initial={{ y: 100, opacity: 0 }}
-    animate={{ y: 0, opacity: 1 }}
-    exit={{ y: 100, opacity: 0 }}
-    className={`fixed bottom-24 left-4 right-4 p-4 rounded-2xl shadow-2xl z-[300] flex items-center gap-3 border ${
-      type === 'success'
-        ? 'bg-emerald-600 border-emerald-400 text-white'
-        : 'bg-slate-800 border-slate-700 text-white'
-    }`}
-  >
-    <CheckCircle size={20} />
-    <span className="font-bold text-sm">{message}</span>
-  </motion.div>
-);
+// success = verde ✓ · error = vermelho ! · info (ou qualquer outro) = neutro i
+const TOAST_STYLES: Record<string, { cls: string; Icon: LucideIcon }> = {
+  success: { cls: 'bg-emerald-600 border-emerald-400', Icon: CheckCircle },
+  error:   { cls: 'bg-red-600 border-red-400',         Icon: AlertCircle },
+  info:    { cls: 'bg-slate-800 border-slate-700',     Icon: Info },
+};
+
+export const Toast = ({ message, type }: { message: string; type: string }) => {
+  const { cls, Icon } = TOAST_STYLES[type] ?? TOAST_STYLES.info;
+  return (
+    <motion.div
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      role={type === 'error' ? 'alert' : 'status'}
+      aria-live={type === 'error' ? 'assertive' : 'polite'}
+      className={`fixed bottom-24 left-4 right-4 max-w-md mx-auto p-4 rounded-2xl shadow-2xl z-[300] flex items-center gap-3 border text-white ${cls}`}
+    >
+      <Icon size={20} className="shrink-0" />
+      <span className="font-bold text-sm">{message}</span>
+    </motion.div>
+  );
+};
 
 // ── Skeleton Card ─────────────────────────────────────────────────────────────
 export const SkeletonCard = () => (

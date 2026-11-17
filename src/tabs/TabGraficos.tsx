@@ -964,7 +964,7 @@ export function TabGraficos({
               {/* Header: avatar + nome + total */}
               <div className="flex items-center justify-between p-5 pb-3">
                 <div className="flex items-center gap-3">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={person.avatar ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(person.name)}&background=8b5cf6&color=fff`}
                     alt={`Foto de ${person.name}`}
                     className="w-12 h-12 rounded-2xl object-cover border-2 border-purple-100 dark:border-purple-900/50"

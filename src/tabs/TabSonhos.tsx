@@ -4,7 +4,7 @@
 // ✅ Modal de edição: nome, meta, imagem (com re-upload)
 // ✅ onCompleteDream(dreamId, categoryId) — assinatura correta do Dashboard
 // ✅ onUpdateDream(id, updates) — novo callback no Dashboard
-// ✅ userId passado como prop para montar path do Storage
+// ✅ Upload de imagem via callback do Dashboard (onUploadImage)
 // ✅ Barra de progresso com cor dinâmica: azul → âmbar → verde
 // ✅ Seção "Conquistados" colapsável
 // ✅ Validação de formulário com feedback visual
@@ -16,7 +16,6 @@ import {
   TrendingUp, Trophy, ChevronDown, ChevronUp,
   AlertTriangle, Sparkles, ImagePlus, Camera,
 } from 'lucide-react';
-import { supabase } from '../supabase';
 import { formatCurrency, handleCurrencyInput, parseAmount } from '../utils';
 import type { Dream, Expense } from '../types';
 
@@ -42,25 +41,6 @@ function getProgressGlow(pct: number) {
   if (pct >= 75) return 'shadow-[0_0_12px_rgba(16,185,129,0.5)]';
   if (pct >= 50) return 'shadow-[0_0_12px_rgba(251,191,36,0.4)]';
   return 'shadow-[0_0_12px_rgba(59,130,246,0.4)]';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: upload para Supabase Storage bucket "dream-images"
-// Path: {userId}/{dreamSlug}.{ext}
-// Bucket deve ser criado com política pública de leitura.
-// ─────────────────────────────────────────────────────────────────────────────
-async function uploadDreamImage(file: File, userId: string, slug: string): Promise<string> {
-  const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const path = `${userId}/${slug}.${ext}`;
-
-  const { error } = await supabase.storage
-    .from('dream-images')
-    .upload(path, file, { upsert: true, contentType: file.type });
-  if (error) throw new Error(`Erro no upload: ${error.message}`);
-
-  const { data } = supabase.storage.from('dream-images').getPublicUrl(path);
-  // Cache-buster para forçar reload da imagem após substituição
-  return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,7 +123,7 @@ function ImagePicker({
       >
         {preview ? (
           <>
-            <img src={preview} alt="Preview da imagem" className="w-full h-full object-cover" />
+            <img loading="lazy" decoding="async" src={preview} alt="Preview da imagem" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera size={22} className="text-white" />
               <span className="text-[9px] font-black uppercase text-white tracking-widest">Trocar foto</span>
@@ -249,11 +229,11 @@ function SaveModal({
 // mode="add" → cria novo; mode="edit" → edita existente
 // ─────────────────────────────────────────────────────────────────────────────
 function DreamFormModal({
-  mode, dream, userId, onSave, onCancel,
+  mode, dream, onUploadImage, onSave, onCancel,
 }: {
   mode: 'add' | 'edit';
   dream?: DreamWithProgress;       // obrigatório no modo edit
-  userId: string;
+  onUploadImage: (file: File, slug: string) => Promise<string>;
   onSave: (data: { title: string; target: number; imageUrl: string }) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -283,7 +263,7 @@ function DreamFormModal({
         const slug = isEdit && dream
           ? dream.id
           : `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        imageUrl = await uploadDreamImage(imageFile, userId, slug);
+        imageUrl = await onUploadImage(imageFile, slug);
       }
 
       await onSave({ title: title.trim(), target: amount, imageUrl });
@@ -405,7 +385,7 @@ interface Props {
   expenses: Expense[];
   fetchData: () => void;
   showToast: (msg: string, type?: string) => void;
-  userId: string;
+  onUploadImage: (file: File, slug: string) => Promise<string>;
   onAddDream: (title: string, target: number, image: string) => Promise<void>;
   onUpdateDream: (id: string, updates: { title?: string; target_value?: number; image_url?: string }) => Promise<void>;
   onCompleteDream: (dreamId: string, categoryId: string) => Promise<void>;
@@ -418,7 +398,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabSonhos({
   dreams, expenses, fetchData, showToast,
-  userId, onAddDream, onUpdateDream, onCompleteDream, onDeleteDream, onQuickSave,
+  onUploadImage, onAddDream, onUpdateDream, onCompleteDream, onDeleteDream, onQuickSave,
 }: Props) {
 
   const [showAdd, setShowAdd]             = useState(false);
@@ -681,7 +661,7 @@ export function TabSonhos({
                     className="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-800/40 rounded-[1.5rem] shadow-sm"
                   >
                     {dream.image_url ? (
-                      <img src={dream.image_url} alt={dream.title} className="w-14 h-14 rounded-2xl object-cover shrink-0 opacity-70" />
+                      <img loading="lazy" decoding="async" src={dream.image_url} alt={dream.title} className="w-14 h-14 rounded-2xl object-cover shrink-0 opacity-70" />
                     ) : (
                       <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
                         <Trophy size={20} className="text-emerald-400" />
@@ -705,13 +685,13 @@ export function TabSonhos({
 
       <AnimatePresence>
         {showAdd && (
-          <DreamFormModal mode="add" userId={userId} onSave={handleAdd} onCancel={() => setShowAdd(false)} />
+          <DreamFormModal mode="add" onUploadImage={onUploadImage} onSave={handleAdd} onCancel={() => setShowAdd(false)} />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {editingDream && (
-          <DreamFormModal mode="edit" dream={editingDream} userId={userId} onSave={handleUpdate} onCancel={() => setEditingDream(null)} />
+          <DreamFormModal mode="edit" dream={editingDream} onUploadImage={onUploadImage} onSave={handleUpdate} onCancel={() => setEditingDream(null)} />
         )}
       </AnimatePresence>
 

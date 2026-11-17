@@ -344,7 +344,7 @@ function ReceiptGallery({ isOpen, onClose, expenses, currentDate, onViewReceipt 
                     aria-label={`Ver comprovante de ${e.description || 'despesa'} — ${formatCurrency(e.amount)}`}
                     className="aspect-square rounded-2xl overflow-hidden border-2 border-slate-50 dark:border-slate-800 shadow-sm relative group"
                   >
-                    <img src={e.receipt_url!} className="w-full h-full object-cover" alt={`Comprovante de ${e.description || 'despesa'}`} />
+                    <img loading="lazy" decoding="async" src={e.receipt_url!} className="w-full h-full object-cover" alt={`Comprovante de ${e.description || 'despesa'}`} />
                     <div className="absolute inset-0 bg-black/20 group-active:bg-black/0 transition-colors" />
                     <div className="absolute bottom-1 right-2 text-[8px] font-black text-white drop-shadow-md">
                       {formatCurrency(e.amount)}
@@ -699,7 +699,7 @@ export function TabExtrato({
                   : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-500'
               }`}
             >
-              <img src={avatarUrl} className="w-7 h-7 rounded-full object-cover" alt={`Foto de ${exp.profiles?.full_name ?? 'usuário'}`} />
+              <img loading="lazy" decoding="async" src={avatarUrl} className="w-7 h-7 rounded-full object-cover" alt={`Foto de ${exp.profiles?.full_name ?? 'usuário'}`} />
               <span className="text-[10px] font-black uppercase tracking-tighter">{firstName}</span>
             </button>
           );

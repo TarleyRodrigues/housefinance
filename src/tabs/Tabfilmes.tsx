@@ -209,7 +209,7 @@ function PosterCard({
       {/* Poster */}
       <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
         {item.poster_url ? (
-          <img
+          <img decoding="async"
             src={`${TMDB_IMAGE}${item.poster_url}`}
             alt={`Poster de ${item.title}`}
             className="w-full h-full object-cover"
@@ -346,7 +346,7 @@ function PosterCard({
                   >
                     <div className="w-6 h-6 rounded-full overflow-hidden border border-blue-500/50 shrink-0 bg-blue-900/50 flex items-center justify-center">
                       {myRating?.profile?.avatar_url
-                        ? <img src={myRating.profile.avatar_url} alt="Você" className="w-full h-full object-cover" />
+                        ? <img loading="lazy" decoding="async" src={myRating.profile.avatar_url} alt="Você" className="w-full h-full object-cover" />
                         : <Star size={10} className="text-blue-400" />
                       }
                     </div>
@@ -370,7 +370,7 @@ function PosterCard({
               {otherRatings.map((r) => (
                 <div key={r.user_id} className="flex items-center gap-2 py-0.5">
                   <div className="w-6 h-6 rounded-full overflow-hidden border border-slate-600/50 shrink-0">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={r.profile?.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(r.profile?.full_name ?? 'U')}&size=32&background=475569&color=fff`}
                       alt={r.profile?.full_name ?? 'Usuário'}
                       className="w-full h-full object-cover"
@@ -429,7 +429,7 @@ function PosterCard({
                 <div className="space-y-1">
                   {otherRatings.map((r) => (
                     <div key={r.user_id} className="flex items-center gap-1.5">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={r.profile?.avatar_url ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(r.profile?.full_name ?? 'U')}&size=32`}
                         alt={r.profile?.full_name ?? 'Usuário'}
                         className="w-4 h-4 rounded-full object-cover border border-slate-600"
@@ -872,7 +872,7 @@ export function TabFilmes({
                       >
                         <div className="w-10 h-14 rounded-xl overflow-hidden bg-slate-700 shrink-0">
                           {result.poster_path
-                            ? <img src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={title} className="w-full h-full object-cover" />
+                            ? <img loading="lazy" decoding="async" src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} alt={title} className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center">{result.media_type === 'movie' ? <Film size={16} className="text-slate-500" /> : <Tv size={16} className="text-slate-500" />}</div>
                           }
                         </div>

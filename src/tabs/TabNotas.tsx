@@ -7,18 +7,18 @@
 
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Save, Trash2, Lock, LockOpen, Users, ChevronDown, Search, AlertTriangle } from 'lucide-react';
+import { Plus, X, Save, Trash2, Lock, LockOpen, Users, ChevronDown, Search, AlertTriangle, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { supabase } from '../supabase';
 import { useAuth } from '../AuthContext';
 import { haptic } from '../utils/haptic';
-import type { Note } from '../types';
+import type { Note, NotePayload } from '../types';
 
 interface Props {
   notes: Note[];
-  fetchData: (force?: boolean) => void;
   showToast: (msg: string, type?: string) => void;
+  onSaveNote: (payload: NotePayload, id: string | null) => Promise<void>;
+  onDeleteNote: (id: string) => Promise<void>;
 }
 
 const PRESET_COLORS = [
@@ -114,7 +114,7 @@ function NoteCard({ note, isOwn, onOpen, index }: {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function TabNotas({ notes, fetchData, showToast }: Props) {
+export function TabNotas({ notes, showToast, onSaveNote, onDeleteNote }: Props) {
   const { user } = useAuth();
 
   const [showPrivate, setShowPrivate]     = useState(false);
@@ -127,6 +127,8 @@ export function TabNotas({ notes, fetchData, showToast }: Props) {
   const [isSaving, setIsSaving]           = useState(false);
   const [searchTerm, setSearchTerm]       = useState('');
   const [showCloseWarning, setShowCloseWarning] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting]       = useState(false);
   const [originalNote, setOriginalNote]   = useState<{ title: string; content: string } | null>(null);
 
   // Filtro de busca + separação compartilhadas/privadas
@@ -166,6 +168,7 @@ export function TabNotas({ notes, fetchData, showToast }: Props) {
     setNoteColor(note.color || '#ffffff');
     setNoteIsPrivate(note.is_private ?? false);
     setOriginalNote({ title: note.title, content: note.content || '' });
+    setShowDeleteConfirm(false);
     setIsEditorOpen(true);
   };
 
@@ -181,28 +184,20 @@ export function TabNotas({ notes, fetchData, showToast }: Props) {
   const saveNote = async () => {
     if (!noteTitle.trim() || isSaving) return;
     setIsSaving(true);
-    const payload = {
+    const payload: NotePayload = {
       title:      noteTitle.trim(),
       content:    noteContent,
       color:      noteColor,
       is_private: noteIsPrivate,
-      user_id:    user.id,
     };
 
     try {
-      if (editingNoteId) {
-        const { error } = await supabase.from('notes').update(payload).eq('id', editingNoteId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('notes').insert(payload);
-        if (error) throw error;
-      }
+      await onSaveNote(payload, editingNoteId);
       haptic('light');
       setIsEditorOpen(false);
       setOriginalNote(null);
       setShowCloseWarning(false);
       showToast('Nota salva!');
-      fetchData();
     } catch {
       showToast('Erro ao salvar nota', 'error');
     } finally {
@@ -211,13 +206,20 @@ export function TabNotas({ notes, fetchData, showToast }: Props) {
   };
 
   const deleteNote = async (id: string) => {
+    if (isDeleting) return;
     haptic('heavy');
-    const { error } = await supabase.from('notes').delete().eq('id', id);
-    if (error) { showToast('Erro ao apagar', 'error'); return; }
-    setIsEditorOpen(false);
-    setOriginalNote(null);
-    showToast('Nota apagada', 'info');
-    fetchData();
+    setIsDeleting(true);
+    try {
+      await onDeleteNote(id);
+      setShowDeleteConfirm(false);
+      setIsEditorOpen(false);
+      setOriginalNote(null);
+      showToast('Nota apagada', 'info');
+    } catch {
+      showToast('Erro ao apagar. Tente novamente.', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const canEdit = (note: Note) => !note.is_private || note.user_id === user?.id;
@@ -440,12 +442,54 @@ export function TabNotas({ notes, fetchData, showToast }: Props) {
             {/* Botão deletar */}
             {editingNoteId && (
               <button
-                onClick={() => deleteNote(editingNoteId)}
-                className="mt-4 p-4 text-red-500 font-black text-[10px] border-2 border-red-50 dark:border-red-900/30 rounded-2xl uppercase tracking-[0.2em] active:scale-95 transition-all flex items-center justify-center gap-2"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="mt-4 min-h-[44px] p-4 text-red-500 font-black text-[10px] border-2 border-red-50 dark:border-red-900/30 rounded-2xl uppercase tracking-[0.2em] active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <Trash2 size={14} /> Apagar Nota
               </button>
             )}
+
+            {/* Overlay: confirmar exclusão */}
+            <AnimatePresence>
+              {showDeleteConfirm && editingNoteId && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  role="alertdialog" aria-modal="true" aria-labelledby="note-delete-title"
+                  className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-5 p-8"
+                >
+                  <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
+                    <Trash2 size={26} className="text-red-500" />
+                  </div>
+                  <div className="text-center">
+                    <h3 id="note-delete-title" className="font-black text-slate-800 dark:text-white text-base uppercase tracking-tight mb-2">
+                      Apagar esta nota?
+                    </h3>
+                    <p className="text-sm text-slate-400 font-medium leading-relaxed">
+                      Essa ação não pode ser desfeita.
+                    </p>
+                  </div>
+                  <div className="flex gap-3 w-full">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={isDeleting}
+                      className="flex-1 min-h-[44px] py-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-xs uppercase tracking-wider active:scale-95 transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => deleteNote(editingNoteId)}
+                      disabled={isDeleting}
+                      className="flex-1 min-h-[44px] py-3 rounded-2xl bg-red-500 text-white font-black text-xs uppercase tracking-wider active:scale-95 transition-all shadow-lg shadow-red-500/30 flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {isDeleting && <Loader2 size={14} className="animate-spin" />}
+                      Apagar
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Overlay: alterações não salvas */}
             <AnimatePresence>
