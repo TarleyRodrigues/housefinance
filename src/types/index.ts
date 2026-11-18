@@ -64,7 +64,16 @@ export interface ExpenseTemplate {
   description: string;
   amount: number;
   category_name: string;
+  merchant?: string | null;  // estabelecimento — alter table expense_templates add column if not exists merchant text;
   created_at: string;
+}
+
+// Payload de criação/edição de gasto padrão
+export interface ExpenseTemplatePayload {
+  description: string;
+  amount: number;
+  category_name: string;
+  merchant: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +85,8 @@ export interface Category {
   monthly_goal?: number;
   color?: string;
   is_active: boolean;
-  type?: 'couple' | 'individual';       
+  type?: 'couple' | 'individual';
+  default_merchant?: string | null; // fornecedor padrão (ex: Energia → Enel) — alter table categories add column if not exists default_merchant text;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

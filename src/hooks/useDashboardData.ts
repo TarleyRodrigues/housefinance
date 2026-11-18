@@ -268,7 +268,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       catsRes, profileRes, prevRes, currRes, annRes, dreamsRes,
       tplRes, recRes, analysesRes, remRes,
     ] = await Promise.all([
-      supabase.from('categories').select('id, name, monthly_goal, color, type').order('name'),
+      supabase.from('categories').select('*').order('name'),
       user
         ? supabase.from('profiles').select('id, full_name, avatar_url').eq('id', user.id).maybeSingle()
         : Promise.resolve({ data: null, error: null }),

@@ -35,7 +35,7 @@ const TabNotas       = lazy(() => import('../tabs/TabNotas').then(m       => ({ 
 const TabAvisos      = lazy(() => import('../tabs/TabAvisos').then(m      => ({ default: m.TabAvisos      })));
 const TabAjustes     = lazy(() => import('../tabs/TabAjustes').then(m     => ({ default: m.TabAjustes     })));
 
-import type { Expense, ExpensePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
+import type { Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 
 const RECIPE_BUCKET = 'recipe-images';
@@ -581,14 +581,16 @@ export default function Dashboard() {
     if (error) throw error;
   }, []);
 
-  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color, type }: {
+  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color, type, default_merchant }: {
     id: string; name?: string; oldName?: string; monthly_goal?: number; color?: string; type?: string;
+    default_merchant?: string | null;
   }) => {
     const updates: Record<string, unknown> = {};
-    if (name !== undefined)         updates.name         = name;
-    if (monthly_goal !== undefined) updates.monthly_goal = monthly_goal;
-    if (color !== undefined)        updates.color        = color;
-    if (type !== undefined)         updates.type         = type;
+    if (name !== undefined)             updates.name             = name;
+    if (monthly_goal !== undefined)     updates.monthly_goal     = monthly_goal;
+    if (color !== undefined)            updates.color            = color;
+    if (type !== undefined)             updates.type             = type;
+    if (default_merchant !== undefined) updates.default_merchant = default_merchant;
     const { error } = await supabase.from('categories').update(updates).eq('id', id);
     if (error) throw error;
     if (name && oldName && name !== oldName) {
@@ -603,25 +605,36 @@ export default function Dashboard() {
   }, []);
 
   // ── Templates de gastos padrão ────────────────────────────────────────────
-  const addTemplate = useCallback(async (payload: {
-    description: string; amount: number; category_name: string;
-  }) => {
-    if (!user) throw new Error('Não autenticado');
-    const { error } = await supabase.from('expense_templates').insert({ ...payload, user_id: user.id });
-    if (error) throw error;
-  }, [user]);
-
-  const updateTemplate = useCallback(async (id: string, payload: {
-    description: string; amount: number; category_name: string;
-  }) => {
-    const { error } = await supabase.from('expense_templates').update(payload).eq('id', id);
+  // Sem estabelecimento, tolera a coluna "merchant" ainda não existir no banco
+  // (SQL 2026-11-17_default_merchants.sql) — nada se perde nesse caso.
+  const writeTemplate = useCallback(async (
+    run: (row: Record<string, unknown>) => PromiseLike<{ error: { code?: string } | null }>,
+    payload: ExpenseTemplatePayload,
+  ) => {
+    let { error } = await run({ ...payload });
+    if (error?.code === 'PGRST204' && payload.merchant === null) {
+      const { merchant: _omit, ...rest } = payload;
+      ({ error } = await run(rest));
+    }
     if (error) throw error;
   }, []);
+
+  const addTemplate = useCallback(async (payload: ExpenseTemplatePayload) => {
+    if (!user) throw new Error('Não autenticado');
+    await writeTemplate((row) => supabase.from('expense_templates').insert({ ...row, user_id: user.id }), payload);
+    fetchData();
+  }, [user, writeTemplate, fetchData]);
+
+  const updateTemplate = useCallback(async (id: string, payload: ExpenseTemplatePayload) => {
+    await writeTemplate((row) => supabase.from('expense_templates').update(row).eq('id', id), payload);
+    fetchData();
+  }, [writeTemplate, fetchData]);
 
   const deleteTemplate = useCallback(async (id: string) => {
     const { error } = await supabase.from('expense_templates').delete().eq('id', id);
     if (error) throw error;
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   // ── Sonhos ────────────────────────────────────────────────────────────────
   const addDream = useCallback(async (title: string, targetValue: number, imageUrl: string) => {
@@ -1156,14 +1169,13 @@ export default function Dashboard() {
             )}
             {activeTab === 'config' && (
               <TabAjustes userProfile={userProfile} categories={categories} expenses={expenses}
-                expenseTemplates={expenseTemplates} shoppingCategories={shoppingCategories}
+                shoppingCategories={shoppingCategories}
                 notificationEmails={notificationEmails}
                 currentDate={currentDate} theme={theme} setTheme={setTheme}
                 fetchData={fetchData} showToast={showToast}
                 onOpenLogs={() => setActiveTab('logs')} onSignOut={signOut}
                 onAddCategory={addCategory} onUpdateCategory={updateCategory}
                 onDeleteCategory={deleteCategory}
-                onAddTemplate={addTemplate} onUpdateTemplate={updateTemplate} onDeleteTemplate={deleteTemplate}
                 onAddShoppingCategory={addShoppingCategory}
                 onUpdateShoppingCategory={updateShoppingCategory}
                 onDeleteShoppingCategory={deleteShoppingCategory}
@@ -1221,6 +1233,11 @@ export default function Dashboard() {
                 onDelete={deleteRecurring}
                 onDeleteInstallment={deleteInstallmentPlan}
                 onLaunch={launchRecurring}
+                expenseTemplates={expenseTemplates}
+                merchants={merchants}
+                onAddTemplate={addTemplate}
+                onUpdateTemplate={updateTemplate}
+                onDeleteTemplate={deleteTemplate}
                 fetchData={fetchData} />
             )}
           </motion.div>

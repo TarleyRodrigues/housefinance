@@ -1,15 +1,15 @@
 // ─── ABA: CONFIGURAÇÕES ──────────────────────────────────────────────────────
 // ✅ Toggle Casal / Individual por categoria (salva coluna 'type' no Supabase)
 // ✅ Visual diferenciado: azul = casal, roxo = individual
-// ✅ Gerenciador de Templates de Gastos Padrão
+// ✅ Fornecedor padrão por categoria (Gastos padrão ficam em Gastos Fixos)
 
 import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Moon, Sun, LogOut, Plus, Trash2, History,
   Check, AlertTriangle, Download, TrendingUp,
-  Calendar, Tag, Users, User, Zap, ChevronDown, ShoppingCart, Bell, Mail, ToggleLeft, ToggleRight,
-  Store, Pencil, Search, Loader2, IdCard, SlidersHorizontal, ChevronRight,
+  Calendar, Tag, Users, User, ChevronDown, ShoppingCart, Bell, Mail, ToggleLeft, ToggleRight,
+  Store, Pencil, Search, IdCard, SlidersHorizontal, ChevronRight,
 } from 'lucide-react';
 import { formatCurrency, handleCurrencyInput, parseAmount } from '../utils';
 import { resolveStudentCard } from '../utils/studentCard';
@@ -18,7 +18,7 @@ import { StudentCardSettings } from '../components/StudentCardSettings';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type {
-  Category, Profile, Expense, ExpenseTemplate, ShoppingCategory, NotificationEmail, Merchant,
+  Category, Profile, Expense, ShoppingCategory, NotificationEmail, Merchant,
   StudentCard, StudentCardPayload,
 } from '../types';
 
@@ -81,187 +81,9 @@ function ConfirmModal({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB: ExpenseTemplateManager — Gerenciar templates de gastos padrão
-// ─────────────────────────────────────────────────────────────────────────────
-interface TemplateManagerProps {
-  templates: ExpenseTemplate[];
-  categories: Category[];
-  onAdd: (payload: { description: string; amount: number; category_name: string }) => Promise<void>;
-  onUpdate: (id: string, payload: { description: string; amount: number; category_name: string }) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  showToast: (msg: string, type?: string) => void;
-  fetchData: () => void;
-}
-
 // ConfirmModal renderiza HTML — escapa texto digitado pelo usuário
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const EMPTY_TEMPLATE_FORM ={ description: '', amount: '', category_name: '' };
-
-function ExpenseTemplateManager({ templates, categories, onAdd, onUpdate, onDelete, showToast, fetchData }: TemplateManagerProps) {
-  const [form, setForm]   = useState(EMPTY_TEMPLATE_FORM);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [toDelete, setToDelete] = useState<ExpenseTemplate | null>(null);
-
-  const patch = (partial: Partial<typeof form>) => setForm((f) => ({ ...f, ...partial }));
-
-  const startEdit = (tpl: ExpenseTemplate) => {
-    setEditingId(tpl.id);
-    setForm({
-      description: tpl.description,
-      amount: new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(tpl.amount),
-      // Categoria apagada/renomeada: força escolher de novo
-      category_name: categories.some((c) => c.name === tpl.category_name) ? tpl.category_name : '',
-    });
-  };
-
-  const cancelEdit = () => { setEditingId(null); setForm(EMPTY_TEMPLATE_FORM); };
-
-  const handleSubmit = async () => {
-    const amount = parseAmount(form.amount);
-    if (!form.description.trim() || isNaN(amount) || amount <= 0 || !form.category_name) {
-      showToast('Preencha descrição, valor e categoria', 'error');
-      return;
-    }
-    const payload = { description: form.description.trim(), amount, category_name: form.category_name };
-    setLoading(true);
-    try {
-      if (editingId) await onUpdate(editingId, payload);
-      else await onAdd(payload);
-      showToast(editingId ? 'Template atualizado!' : 'Template criado!');
-      cancelEdit();
-      fetchData();
-    } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message;
-      console.error('Erro ao salvar template:', err);
-      showToast(msg ? `Erro ao salvar template: ${msg}` : 'Erro ao salvar template', 'error');
-    }
-    finally { setLoading(false); }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!toDelete) return;
-    try {
-      await onDelete(toDelete.id);
-      showToast('Template removido', 'info');
-      fetchData();
-    } catch { showToast('Erro ao remover template', 'error'); }
-    finally { setToDelete(null); }
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Formulário de novo template */}
-      <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-[2rem] border border-amber-100 dark:border-amber-900/30">
-        <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
-          {editingId ? 'Editar template' : 'Novo template'}
-        </p>
-        <input
-          className="w-full p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 text-sm outline-none font-bold text-slate-800 dark:text-white placeholder:text-slate-300 focus:border-amber-400 dark:focus:border-amber-600 transition-colors"
-          placeholder="Descrição (ex: Conta de luz)"
-          value={form.description}
-          onChange={(e) => patch({ description: e.target.value })}
-        />
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-600 dark:text-amber-400 font-black text-base pointer-events-none">R$</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            className="w-full p-4 pl-12 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 text-xl font-black outline-none text-amber-700 dark:text-amber-400 placeholder:text-slate-300 focus:border-amber-400 dark:focus:border-amber-600 transition-colors"
-            placeholder="0,00"
-            value={form.amount}
-            onChange={(e) => patch({ amount: handleCurrencyInput(e.target.value) })}
-          />
-        </div>
-        <select
-          value={form.category_name}
-          onChange={(e) => patch({ category_name: e.target.value })}
-          className="w-full p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 text-xs outline-none font-bold text-slate-800 dark:text-slate-200 focus:border-amber-400 dark:focus:border-amber-600 transition-colors"
-        >
-          <option value="">Categoria...</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.name}>{c.name}</option>
-          ))}
-        </select>
-        <div className="flex gap-2">
-          {editingId && (
-            <button
-              type="button"
-              onClick={cancelEdit}
-              disabled={loading}
-              className="min-h-[44px] px-4 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 font-black text-xs uppercase tracking-widest rounded-2xl border border-slate-200 dark:border-slate-700 active:scale-95 transition-all disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-          )}
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex-1 min-h-[44px] py-3 bg-amber-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl active:scale-95 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : editingId ? <Check size={14} /> : <Plus size={14} />}
-            {editingId ? 'Salvar Alterações' : 'Salvar Template'}
-          </button>
-        </div>
-      </div>
-
-      {/* Lista de templates existentes */}
-      {templates.length === 0 ? (
-        <p className="text-center text-slate-300 dark:text-slate-600 py-6 font-black uppercase text-[9px] tracking-[0.2em]">
-          Nenhum template criado
-        </p>
-      ) : (
-        <AnimatePresence>
-          {templates.map((tpl) => (
-            <motion.div
-              key={tpl.id} layout
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-              className={`flex items-center justify-between p-4 bg-white dark:bg-slate-900/50 rounded-[1.5rem] border shadow-sm ${
-                editingId === tpl.id ? 'border-amber-400 dark:border-amber-600' : 'border-slate-100 dark:border-slate-800'
-              }`}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="font-black text-sm text-slate-800 dark:text-slate-200 truncate">{tpl.description}</p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                  {formatCurrency(tpl.amount)} · {tpl.category_name}
-                  {!categories.some((c) => c.name === tpl.category_name) && (
-                    <span className="text-red-400 normal-case"> (categoria removida)</span>
-                  )}
-                </p>
-              </div>
-              <button
-                onClick={() => startEdit(tpl)}
-                aria-label={`Editar template ${tpl.description}`}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-amber-500 active:scale-90 transition-all"
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                onClick={() => setToDelete(tpl)}
-                aria-label={`Apagar template ${tpl.description}`}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-red-500 active:scale-90 transition-all"
-              >
-                <Trash2 size={15} />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      )}
-
-      <ConfirmModal
-        isOpen={!!toDelete}
-        title="Apagar template?"
-        description={`<strong>${escapeHtml(toDelete?.description ?? '')}</strong><br/>Não afeta gastos já registrados.`}
-        confirmLabel="Apagar"
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setToDelete(null)}
-      />
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: CategoryManager com toggle casal/individual
@@ -271,14 +93,15 @@ interface CategoryManagerProps {
   onAdd: (name: string) => Promise<void>;
   onUpdate: (payload: {
     id: string; name?: string; oldName?: string;
-    monthly_goal?: number; color?: string; type?: string;
+    monthly_goal?: number; color?: string; type?: string; default_merchant?: string | null;
   }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   showToast: (msg: string, type?: string) => void;
   fetchData: () => void;
+  merchantNames: string[];
 }
 
-function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fetchData }: CategoryManagerProps) {
+function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fetchData, merchantNames }: CategoryManagerProps) {
   const [newCat, setNewCat]                 = useState('');
   const [savingFields, setSavingFields]     = useState<Record<string, boolean>>({});
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
@@ -293,6 +116,9 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
     ]))
   );
   const [dirtyGoals, setDirtyGoals] = useState<Record<string, boolean>>({});
+  const [defaultMerchants, setDefaultMerchants] = useState<Record<string, string>>(() =>
+    Object.fromEntries(categories.map((c) => [c.id, c.default_merchant ?? '']))
+  );
 
   useMemo(() => {
     setNames(Object.fromEntries(categories.map((c) => [c.id, c.name])));
@@ -301,6 +127,7 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
       c.monthly_goal ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(c.monthly_goal) : '',
     ])));
     setDirtyGoals({});
+    setDefaultMerchants(Object.fromEntries(categories.map((c) => [c.id, c.default_merchant ?? ''])));
   }, [categories]);
 
   const showSaved = (key: string) => {
@@ -337,6 +164,22 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
       setDirtyGoals((d) => ({ ...d, [cat.id]: false }));
       fetchData();
     } catch { showToast('Erro ao atualizar meta', 'error'); }
+  };
+
+  // Fornecedor padrão: preenchido automaticamente no Novo Gasto ao escolher a categoria
+  const handleDefaultMerchantSave = async (cat: Category) => {
+    const value = (defaultMerchants[cat.id] ?? '').trim();
+    if (value === (cat.default_merchant ?? '')) return;
+    try {
+      await onUpdate({ id: cat.id, default_merchant: value || null });
+      showSaved(`merchant-${cat.id}`);
+      fetchData();
+    } catch (err) {
+      const { code } = (err as { code?: string }) ?? {};
+      showToast(code === 'PGRST204'
+        ? 'Falta a coluna "default_merchant" — rode o SQL no Supabase'
+        : 'Erro ao salvar fornecedor padrão', 'error');
+    }
   };
 
   const handleColorSelect = async (cat: Category, color: string) => {
@@ -558,16 +401,45 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
                     )}
                   </AnimatePresence>
                 </div>
+
+                <div className="flex flex-col gap-1 bg-white dark:bg-slate-800 p-3 rounded-2xl shadow-inner border border-slate-100 dark:border-slate-700 transition-colors">
+                  <label htmlFor={`cat-merchant-${c.id}`} className="flex items-center gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">
+                    <Store size={9} /> Fornecedor padrão
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      id={`cat-merchant-${c.id}`} type="text" list="category-merchant-list"
+                      className="bg-transparent text-sm font-bold text-slate-700 dark:text-slate-200 outline-none flex-1 min-w-0 min-h-[32px] placeholder:text-slate-300 dark:placeholder:text-slate-600 placeholder:font-medium"
+                      placeholder="Ex: Enel (opcional)"
+                      value={defaultMerchants[c.id] ?? ''}
+                      onChange={(e) => setDefaultMerchants((m) => ({ ...m, [c.id]: e.target.value }))}
+                      onBlur={() => handleDefaultMerchantSave(c)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                    />
+                    <AnimatePresence>
+                      {savingFields[`merchant-${c.id}`] && (
+                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-emerald-500 shrink-0" aria-label="Salvo">
+                          <Check size={14} />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
               </motion.div>
             );
           })}
         </AnimatePresence>
       </div>
 
+      <datalist id="category-merchant-list">
+        {merchantNames.map((m) => <option key={m} value={m} />)}
+      </datalist>
+
       <ConfirmModal
         isOpen={!!categoryToDelete}
         title="Apagar categoria?"
-        description={`<strong>${categoryToDelete?.name}</strong><br/>Os gastos desta categoria não serão apagados, mas ficarão sem categoria.`}
+        description={`<strong>${escapeHtml(categoryToDelete?.name ?? '')}</strong><br/>Os gastos desta categoria não serão apagados, mas ficarão sem categoria.`}
         confirmLabel="Apagar"
         onConfirm={handleDeleteConfirm}
         onCancel={() => setCategoryToDelete(null)}
@@ -1055,7 +927,6 @@ interface Props {
   userProfile: Profile | null;
   categories: Category[];
   expenses: Expense[];
-  expenseTemplates: ExpenseTemplate[];
   shoppingCategories: ShoppingCategory[];
   currentDate: Date;
   theme: 'light' | 'dark' | 'brasil';
@@ -1067,12 +938,9 @@ interface Props {
   onAddCategory: (name: string) => Promise<void>;
   onUpdateCategory: (payload: {
     id: string; name?: string; oldName?: string;
-    monthly_goal?: number; color?: string; type?: string;
+    monthly_goal?: number; color?: string; type?: string; default_merchant?: string | null;
   }) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
-  onAddTemplate: (payload: { description: string; amount: number; category_name: string }) => Promise<void>;
-  onUpdateTemplate: (id: string, payload: { description: string; amount: number; category_name: string }) => Promise<void>;
-  onDeleteTemplate: (id: string) => Promise<void>;
   onAddShoppingCategory: (name: string) => Promise<void>;
   onUpdateShoppingCategory: (id: string, name: string) => Promise<void>;
   onDeleteShoppingCategory: (id: string) => Promise<void>;
@@ -1093,10 +961,10 @@ interface Props {
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabAjustes({
-  userProfile, categories, expenses, expenseTemplates, shoppingCategories, notificationEmails, merchants, currentDate,
+  userProfile, categories, expenses, shoppingCategories, notificationEmails, merchants, currentDate,
   theme, setTheme, fetchData, showToast,
   onOpenLogs, onSignOut, onAddCategory, onUpdateCategory, onDeleteCategory,
-  onAddTemplate, onUpdateTemplate, onDeleteTemplate, onAddShoppingCategory, onUpdateShoppingCategory, onDeleteShoppingCategory,
+  onAddShoppingCategory, onUpdateShoppingCategory, onDeleteShoppingCategory,
   onAddNotificationEmail, onToggleNotificationEmail, onDeleteNotificationEmail,
   onAddMerchant, onUpdateMerchant, onDeleteMerchant,
   studentCard, onSaveStudentCard, onUploadStudentCardPhoto,
@@ -1104,18 +972,21 @@ export function TabAjustes({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showStudentCard, setShowStudentCard]     = useState(false);
   const [showCardSettings, setShowCardSettings]   = useState(false);
+  const merchantNames = useMemo(
+    () => merchants.map((m) => m.name).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [merchants],
+  );
   const studentCardView = useMemo(
     () => resolveStudentCard(studentCard, userProfile, userProfile?.id ?? ''),
     [studentCard, userProfile],
   );
-  const [openSections, setOpenSections] = useState<{ templates: boolean; categories: boolean; shoppingCategories: boolean; notifications: boolean; merchants: boolean }>({
-    templates: false,
+  const [openSections, setOpenSections] = useState<{ categories: boolean; shoppingCategories: boolean; notifications: boolean; merchants: boolean }>({
     categories: false,
     shoppingCategories: false,
     notifications: false,
     merchants: false,
   });
-  const toggleSection = (key: 'templates' | 'categories' | 'shoppingCategories' | 'notifications' | 'merchants') =>
+  const toggleSection = (key: 'categories' | 'shoppingCategories' | 'notifications' | 'merchants') =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
   const stats = useMemo(() => {
@@ -1280,61 +1151,6 @@ export function TabAjustes({
         </div>
       </button>
 
-      {/* ── 4. GASTOS PADRÃO (accordion) ── */}
-      <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm transition-colors overflow-hidden">
-        <button
-          onClick={() => toggleSection('templates')}
-          aria-expanded={openSections.templates}
-          className="w-full flex items-center justify-between p-5 active:bg-slate-50 dark:active:bg-slate-700/40 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-              <Zap size={14} className="text-amber-500" />
-            </div>
-            <div className="text-left">
-              <p className="font-black text-slate-800 dark:text-slate-200 text-xs uppercase tracking-tight">
-                Gastos Padrão
-              </p>
-              {!openSections.templates && expenseTemplates.length > 0 && (
-                <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
-                  {expenseTemplates.length} template{expenseTemplates.length !== 1 ? 's' : ''} criado{expenseTemplates.length !== 1 ? 's' : ''}
-                </p>
-              )}
-            </div>
-          </div>
-          <ChevronDown
-            size={16}
-            className={`text-slate-400 transition-transform duration-200 ${openSections.templates ? 'rotate-180' : ''}`}
-          />
-        </button>
-        <AnimatePresence>
-          {openSections.templates && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="px-5 pb-5">
-                <p className="text-[9px] text-slate-400 font-medium mb-4 leading-relaxed">
-                  Templates para preencher automaticamente o formulário de novo gasto.
-                </p>
-                <ExpenseTemplateManager
-                  templates={expenseTemplates}
-                  categories={categories}
-                  onAdd={onAddTemplate}
-                  onUpdate={onUpdateTemplate}
-                  onDelete={onDeleteTemplate}
-                  showToast={showToast}
-                  fetchData={fetchData}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
       {/* ── 5. CATEGORIAS & METAS (accordion) ── */}
       <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm transition-colors overflow-hidden">
         <button
@@ -1374,6 +1190,7 @@ export function TabAjustes({
               <div className="px-5 pb-5">
                 <CategoryManager
                   categories={categories}
+                  merchantNames={merchantNames}
                   onAdd={onAddCategory}
                   onUpdate={onUpdateCategory}
                   onDelete={onDeleteCategory}

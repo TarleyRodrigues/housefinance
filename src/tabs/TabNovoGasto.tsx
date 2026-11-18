@@ -7,7 +7,7 @@ import { Loader2, Image as ImageIcon, X, Zap, CalendarDays, Store, CreditCard } 
 import { format, addMonths } from 'date-fns';
 import { haptic } from '../utils/haptic';
 import { handleCurrencyInput, parseAmount, formatCurrency } from '../utils';
-import type { Category, Expense, ExpensePayload, ExpenseTemplate, Merchant } from '../types';
+import type { Category, Expense, ExpensePayload, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
 
 interface Props {
   categories: Category[];
@@ -18,7 +18,7 @@ interface Props {
   templates: ExpenseTemplate[];
   onSave: (payload: ExpensePayload, editId: string | null) => Promise<void>;
   onUploadReceipt: (file: File) => Promise<string>;
-  onAddTemplate: (payload: { description: string; amount: number; category_name: string }) => Promise<void>;
+  onAddTemplate: (payload: ExpenseTemplatePayload) => Promise<void>;
   fetchData: () => void;
   showToast: (msg: string, type?: string) => void;
   onSaved: () => void;
@@ -37,6 +37,9 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
   const [category, setCategory]     = useState('');
   const [description, setDescription] = useState('');
   const [merchant, setMerchant]     = useState('');
+  // Valor preenchido automaticamente (fornecedor padrão / gasto padrão). Enquanto o
+  // usuário não editar, trocar de categoria pode substituí-lo pelo novo padrão.
+  const autoMerchantRef = useRef<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState('');
   const [date, setDate]             = useState(todayStr);
   const [isCredit, setIsCredit]     = useState(false);
@@ -115,20 +118,41 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
       setIsCredit(false);
       setPaymentMonth(defaultPaymentMonth);
     }
+    autoMerchantRef.current = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingExpense, duplicateData]);
 
-  // Aplica um template ao formulário
+  const defaultMerchantOf = (categoryName: string) =>
+    categories.find(c => c.name === categoryName)?.default_merchant?.trim() || '';
+
+  // Preenche o estabelecimento de forma automática — sem sobrescrever o que o usuário digitou
+  const autoFillMerchant = (value: string) => {
+    const untouched = !merchant.trim() || merchant === autoMerchantRef.current;
+    if (!untouched) return;
+    setMerchant(value);
+    autoMerchantRef.current = value || null;
+  };
+
+  // Escolher categoria puxa o fornecedor padrão dela (editável)
+  const selectCategory = (name: string) => {
+    setCategory(name);
+    autoFillMerchant(defaultMerchantOf(name));
+  };
+
+  // Aplica um gasto padrão ao formulário
   const applyTemplate = (tpl: ExpenseTemplate) => {
     haptic('light');
     setAmount(new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(tpl.amount));
     setDescription(tpl.description);
-    // Categoria pode ter sido apagada/renomeada depois que o template foi criado
-    if (categories.some(c => c.name === tpl.category_name)) {
-      setCategory(tpl.category_name);
-    } else {
-      setCategory('');
-      showToast(`Categoria "${tpl.category_name}" não existe mais — escolha outra`, 'error');
+    // Categoria pode ter sido apagada/renomeada depois que o gasto padrão foi criado
+    const exists = categories.some(c => c.name === tpl.category_name);
+    setCategory(exists ? tpl.category_name : '');
+    // Estabelecimento do gasto padrão > fornecedor padrão da categoria
+    const value = tpl.merchant?.trim() || (exists ? defaultMerchantOf(tpl.category_name) : '');
+    setMerchant(value);
+    autoMerchantRef.current = value || null;
+    if (!exists) {
+      showToast(`Categoria "${tpl.category_name}" não existe mais — escolha outra ou corrija em Gastos Fixos › Padrão`, 'error');
     }
   };
 
@@ -148,10 +172,12 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
     }
     setSavingTemplate(true);
     try {
-      await onAddTemplate({ description: description.trim(), amount: value, category_name: category });
+      await onAddTemplate({
+        description: description.trim(), amount: value, category_name: category,
+        merchant: merchant.trim() || null,
+      });
       haptic('light');
       showToast('Salvo como gasto padrão!');
-      fetchData();
     } catch (err: unknown) {
       showToast('Erro ao salvar gasto padrão: ' + errorMessage(err), 'error');
     } finally {
@@ -232,9 +258,17 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                 <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-tight leading-none">
                   {tpl.description}
                 </span>
-                <span className="text-[9px] font-bold text-amber-500 dark:text-amber-500 mt-0.5">
+                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-500 mt-0.5">
                   {formatCurrency(tpl.amount)} · {tpl.category_name}
+                  {!categories.some(c => c.name === tpl.category_name) && (
+                    <span className="text-red-500 dark:text-red-400"> (sem categoria)</span>
+                  )}
                 </span>
+                {tpl.merchant && (
+                  <span className="text-[9px] font-medium text-amber-600/80 dark:text-amber-500/80 mt-0.5 flex items-center gap-1">
+                    <Store size={9} /> {tpl.merchant}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -272,7 +306,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => setCategory(c.name)}
+                  onClick={() => selectCategory(c.name)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 text-left ${
                     category === c.name
                       ? 'border-transparent text-white shadow-md'
@@ -314,11 +348,16 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                 type="text"
                 placeholder="Ex: Mercado Extra, iFood..."
                 value={merchant}
-                onChange={(e) => { setMerchant(e.target.value); setShowMerchantSuggestions(true); }}
+                onChange={(e) => { setMerchant(e.target.value); autoMerchantRef.current = null; setShowMerchantSuggestions(true); }}
                 onFocus={() => setShowMerchantSuggestions(true)}
                 className="w-full px-5 pb-4 bg-transparent outline-none text-slate-800 dark:text-slate-200 font-medium text-sm"
               />
             </div>
+            {merchant && merchant === autoMerchantRef.current && (
+              <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-2">
+                Preenchido pelo padrão — pode editar
+              </p>
+            )}
 
             {/* Dropdown de sugestões */}
             {showMerchantSuggestions && merchantSuggestions.length > 0 && (
@@ -330,6 +369,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                     onMouseDown={(e) => {
                       e.preventDefault();
                       setMerchant(m);
+                      autoMerchantRef.current = null;
                       setShowMerchantSuggestions(false);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 active:bg-slate-100 dark:active:bg-slate-700 transition-colors border-b border-slate-100 dark:border-slate-700/50 last:border-0"

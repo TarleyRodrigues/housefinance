@@ -1,16 +1,18 @@
 // ─── ABA: GASTOS RECORRENTES / FIXOS ─────────────────────────────────────────
+// Assinaturas · Parcelas · Gastos padrão (atalhos do Novo Gasto)
 
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Repeat2, Plus, Edit2, Trash2, Pause, Play, Send, CheckCircle2,
   X, AlertTriangle, ChevronDown, Loader2, CreditCard, History,
-  Calendar, Minus,
+  Calendar, Minus, Zap,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency, handleCurrencyInput, parseAmount, addMonths } from '../utils';
-import type { RecurringExpense, Category, Expense } from '../types';
+import { ExpenseTemplateManager } from '../components/ExpenseTemplateManager';
+import type { RecurringExpense, Category, Expense, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
 
 // ─── tipos locais ─────────────────────────────────────────────────────────────
 
@@ -37,8 +39,15 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
   onDeleteInstallment: (id: string, description: string, category_name: string) => Promise<void>;
   onLaunch: (recurring: RecurringExpense) => Promise<void>;
+  expenseTemplates: ExpenseTemplate[];
+  merchants: Merchant[];
+  onAddTemplate: (payload: ExpenseTemplatePayload) => Promise<void>;
+  onUpdateTemplate: (id: string, payload: ExpenseTemplatePayload) => Promise<void>;
+  onDeleteTemplate: (id: string) => Promise<void>;
   fetchData: () => void;
 }
+
+type ViewMode = 'subscriptions' | 'installments' | 'templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: HistoryModal
@@ -558,8 +567,9 @@ function InstallmentCard({ item, categoryColor, paidCount, nextDate, onHistory, 
 export function TabRecorrentes({
   recurringExpenses, expenses, categories, currentDate, isLoading,
   showToast, onAdd, onAddInstallment, onUpdate, onToggle, onDelete, onDeleteInstallment, onLaunch, fetchData,
+  expenseTemplates, merchants, onAddTemplate, onUpdateTemplate, onDeleteTemplate,
 }: Props) {
-  const [viewMode, setViewMode]         = useState<'subscriptions' | 'installments'>('subscriptions');
+  const [viewMode, setViewMode]         = useState<ViewMode>('subscriptions');
   const [showSubForm, setShowSubForm]   = useState(false);
   const [showInstForm, setShowInstForm] = useState(false);
   const [editingItem, setEditingItem]   = useState<RecurringExpense | null>(null);
@@ -612,6 +622,23 @@ export function TabRecorrentes({
     });
     return stats;
   }, [installmentPlans, expenses, todayStr]);
+
+  // Gastos padrão cuja categoria foi apagada/renomeada
+  const orphanTemplates = useMemo(() => {
+    const names = new Set(categories.map(c => c.name));
+    return expenseTemplates.filter(t => !names.has(t.category_name)).length;
+  }, [expenseTemplates, categories]);
+
+  // Sugestões de estabelecimento: cadastrados + já usados em gastos
+  const merchantNames = useMemo(() => {
+    const set = new Map<string, string>();
+    for (const m of merchants) set.set(m.name.trim().toLowerCase(), m.name.trim());
+    for (const e of expenses) {
+      const m = e.merchant?.trim();
+      if (m && !set.has(m.toLowerCase())) set.set(m.toLowerCase(), m);
+    }
+    return [...set.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [merchants, expenses]);
 
   const subMonthlyTotal      = useMemo(() => activeSubs.reduce((a, r) => a + Number(r.amount), 0), [activeSubs]);
   const installRemainingTotal = useMemo(() => installmentPlans.reduce((s, p) => s + (installmentStats[p.id]?.remainingTotal ?? 0), 0), [installmentPlans, installmentStats]);
@@ -693,6 +720,27 @@ export function TabRecorrentes({
               </div>
             </div>
           </motion.div>
+        ) : viewMode === 'templates' ? (
+          <motion.div key="tpl-header"
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 rounded-[2.5rem] shadow-2xl shadow-amber-500/30 text-white relative overflow-hidden"
+          >
+            <div className="absolute -right-10 -top-10 w-44 h-44 bg-white/8 rounded-full pointer-events-none" />
+            <div className="absolute -left-6 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full pointer-events-none" />
+            <div className="relative z-10">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Gastos padrão · atalhos</span>
+              <p className="text-4xl font-black tracking-tighter mt-1">{expenseTemplates.length}</p>
+              <p className="text-[11px] font-medium opacity-90 mt-1 leading-snug">
+                Um toque no Novo Gasto preenche valor, categoria, descrição e estabelecimento.
+              </p>
+              {orphanTemplates > 0 && (
+                <div className="inline-flex items-center gap-1 bg-white/20 rounded-xl px-2.5 py-1 mt-3">
+                  <AlertTriangle size={11} />
+                  <span className="text-[10px] font-black">{orphanTemplates} sem categoria válida</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
         ) : (
           <motion.div key="inst-header"
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
@@ -720,20 +768,38 @@ export function TabRecorrentes({
 
       {/* ── Tabs de modo ── */}
       <div className="flex gap-2 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-2xl">
-        {(['subscriptions', 'installments'] as const).map(mode => (
-          <button key={mode} onClick={() => setViewMode(mode)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+        {(['subscriptions', 'installments', 'templates'] as const).map(mode => (
+          <button key={mode} onClick={() => setViewMode(mode)} aria-pressed={viewMode === mode}
+            className={`relative flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
               viewMode === mode
                 ? mode === 'subscriptions'
-                  ? 'bg-white dark:bg-slate-700 text-violet-600 shadow-sm'
-                  : 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow-sm'
+                  : mode === 'installments'
+                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
                 : 'text-slate-400 dark:text-slate-500'
             }`}>
-            {mode === 'subscriptions' ? <><Repeat2 size={12} /> Assinaturas</> : <><CreditCard size={12} /> Parcelas</>}
+            {mode === 'subscriptions' ? <><Repeat2 size={12} /> Assinaturas</>
+              : mode === 'installments' ? <><CreditCard size={12} /> Parcelas</>
+              : <><Zap size={12} /> Padrão</>}
+            {mode === 'templates' && orphanTemplates > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" aria-label="Há gastos padrão para corrigir" />
+            )}
           </button>
         ))}
       </div>
 
+      {viewMode === 'templates' ? (
+        <ExpenseTemplateManager
+          templates={expenseTemplates}
+          categories={categories}
+          merchantNames={merchantNames}
+          onAdd={onAddTemplate}
+          onUpdate={onUpdateTemplate}
+          onDelete={onDeleteTemplate}
+          showToast={showToast}
+        />
+      ) : (<>
       {/* ── Botão adicionar ── */}
       <button
         onClick={() => viewMode === 'subscriptions' ? (setEditingItem(null), setShowSubForm(true)) : setShowInstForm(true)}
@@ -835,6 +901,7 @@ export function TabRecorrentes({
           )}
         </>
       )}
+      </>)}
 
       {/* ── Modais ── */}
       <AnimatePresence>
