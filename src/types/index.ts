@@ -152,6 +152,14 @@ export interface Log {
 // ─────────────────────────────────────────────────────────────────────────────
 // UI
 // ─────────────────────────────────────────────────────────────────────────────
+// Celebração (confete + cartão) — ver components/Celebration
+export interface CelebrationData {
+  id: number;
+  emoji: string;
+  title: string;
+  message?: string;
+}
+
 export interface ToastState {
   msg: string;
   type: string;

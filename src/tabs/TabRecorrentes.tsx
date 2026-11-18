@@ -13,6 +13,8 @@ import { ptBR } from 'date-fns/locale';
 import { formatCurrency, handleCurrencyInput, parseAmount, addMonths } from '../utils';
 import { ExpenseTemplateManager } from '../components/ExpenseTemplateManager';
 import type { RecurringExpense, Category, Expense, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
+import { EmptyState } from '../components/EmptyState';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 
 // ─── tipos locais ─────────────────────────────────────────────────────────────
 
@@ -705,7 +707,7 @@ export function TabRecorrentes({
               <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">
                 {format(currentDate, 'MMMM yyyy', { locale: ptBR })} · Assinaturas
               </span>
-              <p className="text-4xl font-black tracking-tighter mt-1">{formatCurrency(subMonthlyTotal)}</p>
+              <p className="text-4xl font-black tracking-tighter mt-1"><AnimatedNumber value={subMonthlyTotal} /></p>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <div className="flex items-center gap-1 bg-white/10 rounded-xl px-2.5 py-1">
                   <span className="text-[10px] font-black">{activeSubs.length}</span>
@@ -729,7 +731,7 @@ export function TabRecorrentes({
             <div className="absolute -left-6 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full pointer-events-none" />
             <div className="relative z-10">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Gastos padrão · atalhos</span>
-              <p className="text-4xl font-black tracking-tighter mt-1">{expenseTemplates.length}</p>
+              <p className="text-4xl font-black tracking-tighter mt-1"><AnimatedNumber value={expenseTemplates.length} format={(n) => String(Math.round(n))} /></p>
               <p className="text-[11px] font-medium opacity-90 mt-1 leading-snug">
                 Um toque no Novo Gasto preenche valor, categoria, descrição e estabelecimento.
               </p>
@@ -750,7 +752,7 @@ export function TabRecorrentes({
             <div className="absolute -left-6 -bottom-10 w-32 h-32 bg-blue-400/20 rounded-full pointer-events-none" />
             <div className="relative z-10">
               <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Parcelamentos · a pagar</span>
-              <p className="text-4xl font-black tracking-tighter mt-1">{formatCurrency(installRemainingTotal)}</p>
+              <p className="text-4xl font-black tracking-tighter mt-1"><AnimatedNumber value={installRemainingTotal} /></p>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <div className="flex items-center gap-1 bg-white/10 rounded-xl px-2.5 py-1">
                   <span className="text-[10px] font-black">{installmentPlans.length}</span>
@@ -820,10 +822,8 @@ export function TabRecorrentes({
       ) : viewMode === 'subscriptions' ? (
         <>
           {activeSubs.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-slate-300 dark:text-slate-600">
-              <Repeat2 size={40} strokeWidth={1.5} />
-              <p className="font-black uppercase text-[10px] tracking-widest">Nenhuma assinatura ativa</p>
-            </div>
+            <EmptyState icon={Repeat2} tone="violet" title="Nenhuma assinatura ativa"
+              messages={['Zero mensalidades — a carteira agradece. 😌', 'Nada de streaming por aqui… ainda. 📺']} />
           ) : (
             <div className="space-y-3">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">{activeSubs.length} ativa{activeSubs.length !== 1 ? 's' : ''}</p>
@@ -877,10 +877,8 @@ export function TabRecorrentes({
       ) : (
         <>
           {installmentPlans.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-slate-300 dark:text-slate-600">
-              <CreditCard size={40} strokeWidth={1.5} />
-              <p className="font-black uppercase text-[10px] tracking-widest">Nenhum parcelamento</p>
-            </div>
+            <EmptyState icon={CreditCard} tone="blue" title="Nenhum parcelamento"
+              messages={['Livres de carnê! 🎉', 'Nenhuma parcela pendurada. Que paz. 🕊️']} />
           ) : (
             <div className="space-y-3">
               <AnimatePresence>

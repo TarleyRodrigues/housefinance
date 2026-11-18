@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 
 import BottomNav from '../components/BottomNav';
 import { Toast, SkeletonCard } from '../components/ui';
+import { Celebration } from '../components/Celebration';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useAuth } from '../AuthContext';
 import { supabase } from '../supabase';
@@ -35,7 +36,7 @@ const TabNotas       = lazy(() => import('../tabs/TabNotas').then(m       => ({ 
 const TabAvisos      = lazy(() => import('../tabs/TabAvisos').then(m      => ({ default: m.TabAvisos      })));
 const TabAjustes     = lazy(() => import('../tabs/TabAjustes').then(m     => ({ default: m.TabAjustes     })));
 
-import type { Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
+import type { CelebrationData, Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 
 const RECIPE_BUCKET = 'recipe-images';
@@ -162,6 +163,14 @@ export default function Dashboard() {
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // ── Celebração (confete) ──────────────────────────────────────────────────
+  const [celebration, setCelebration] = useState<CelebrationData | null>(null);
+  const celebrate = useCallback((data: Omit<CelebrationData, 'id'>) => {
+    haptic('success');
+    setCelebration({ ...data, id: Date.now() });
+  }, []);
+  const closeCelebration = useCallback(() => setCelebration(null), []);
+
   const [editingExpense, setEditingExpense]     = useState<Expense | null>(null);
   const [duplicatingExpense, setDuplicatingExpense] = useState<Expense | null>(null);
 
@@ -217,6 +226,29 @@ export default function Dashboard() {
       setManualRefreshing(false);
     }
   }, [manualRefreshing, fetchData, showToast]);
+
+  // Mês anterior fechado dentro das metas → celebra 1x por mês (na Home do mês atual)
+  useEffect(() => {
+    if (isLoading || activeTab !== 'home') return;
+    const now = new Date();
+    if (currentDate.getFullYear() !== now.getFullYear() || currentDate.getMonth() !== now.getMonth()) return;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const key  = `celebrated-goals-${format(prev, 'yyyy-MM')}`;
+    if (localStorage.getItem(key)) return;
+    const goals = categories.filter(c => (c.monthly_goal ?? 0) > 0 && c.is_active !== false);
+    if (goals.length === 0 || prevMonthExpenses.length === 0) return;
+    const spent = new Map<string, number>();
+    for (const e of prevMonthExpenses) spent.set(e.category_name, (spent.get(e.category_name) ?? 0) + Number(e.amount));
+    const allWithin = goals.every(c => (spent.get(c.name) ?? 0) <= (c.monthly_goal ?? 0));
+    localStorage.setItem(key, allWithin ? 'yes' : 'no');
+    if (allWithin) {
+      celebrate({
+        emoji: '🏆',
+        title: `${format(prev, 'MMMM', { locale: ptBR }).replace(/^./, (l) => l.toUpperCase())} dentro das metas!`,
+        message: `Vocês fecharam o mês sem estourar nenhuma das ${goals.length} metas. Mandaram bem!`,
+      });
+    }
+  }, [isLoading, activeTab, currentDate, categories, prevMonthExpenses, celebrate]);
 
   const hasTodayReminder = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -1041,6 +1073,8 @@ export default function Dashboard() {
         {toast && <Toast key={toast.id} message={toast.msg} type={toast.type} />}
       </AnimatePresence>
 
+      <Celebration data={celebration} onClose={closeCelebration} />
+
       {/* Pull-to-refresh indicator */}
       <AnimatePresence>
         {(pullDistance > 0 || isRefreshing) && (
@@ -1216,7 +1250,7 @@ export default function Dashboard() {
               <TabSonhos dreams={dreams} expenses={expenses} fetchData={fetchData}
                 showToast={showToast} onUploadImage={uploadDreamImage} onAddDream={addDream}
                 onUpdateDream={updateDream} onCompleteDream={completeDream}
-                onDeleteDream={deleteDream} onQuickSave={quickSaveDream} />
+                onDeleteDream={deleteDream} onQuickSave={quickSaveDream} onCelebrate={celebrate} />
             )}
             {activeTab === 'recurrent' && (
               <TabRecorrentes

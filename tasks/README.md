@@ -39,3 +39,16 @@ O Claude vai ler o arquivo, entender todo o contexto e executar.
 | 003 | [Task-003](Task-003-lampada-t100-elgin-smart-tuya.md) | Lâmpada T100 Elgin Smart — Tuya IoT Platform | PLANEJADO |
 | 004 | [Task-004](Task-004-lava-roupa-samsung-smartthings.md) | Lava-roupa Samsung — SmartThings API | PLANEJADO |
 | 005 | [Task-005](Task-005-alexa-rotinas-voice-monkey.md) | Rotinas Amazon Alexa — Voice Monkey | PLANEJADO |
+| 006 | [Task-006](Task-006-pacote-visual-1-contagem-celebracao-vazios.md) | Pacote Visual 1 — Contagem animada, celebração e telas vazias | CONCLUÍDO |
+| 007 | [Task-007](Task-007-identidade-visual.md) | Identidade Visual — Fonte, cartões e ícones padronizados | PLANEJADO |
+| 008 | [Task-008](Task-008-emoji-icone-por-categoria.md) | Emoji/Ícone por Categoria | PLANEJADO |
+| 009 | [Task-009](Task-009-temas-sazonais.md) | Temas Sazonais | PLANEJADO |
+| 010 | [Task-010](Task-010-sequencias-e-selos.md) | Sequências e Selos (Gamificação) | PLANEJADO |
+| 011 | [Task-011](Task-011-retrospectiva-do-mes.md) | Retrospectiva do Mês (estilo Wrapped) | PLANEJADO |
+| 012 | [Task-012](Task-012-desafios-do-casal.md) | Desafios do Casal | PLANEJADO |
+| 013 | [Task-013](Task-013-reacoes-nos-gastos.md) | Reações nos Gastos | PLANEJADO |
+| 014 | [Task-014](Task-014-lancamento-por-foto-e-voz.md) | Lançamento por Foto da Nota e por Voz | PLANEJADO |
+| 015 | [Task-015](Task-015-gestos-swipe.md) | Gestos (Swipe) | PLANEJADO |
+| 016 | [Task-016](Task-016-view-transitions.md) | Transições de Página Nativas | PLANEJADO |
+| 017 | [Task-017](Task-017-atalhos-do-app.md) | Atalhos do App Instalado | PLANEJADO |
+| 018 | [Task-018](Task-018-notificacoes-push.md) | Notificações Push | PLANEJADO |

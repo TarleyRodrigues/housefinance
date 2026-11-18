@@ -16,6 +16,7 @@ import {
   Pencil, ShoppingCart, Play, Pause, SkipForward,
   CheckCircle2, Timer, ChevronRight, RotateCcw,
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -748,19 +749,10 @@ export function TabReceitas({
 
       {/* ── GRID ───────────────────────────────────────────────────────────── */}
       {filteredRecipes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="w-20 h-20 rounded-[2rem] bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
-            <UtensilsCrossed size={36} className="text-orange-300 dark:text-orange-700" />
-          </div>
-          <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-300 dark:text-slate-600">
-              {filterCat ? `Nenhuma receita em "${filterCat}"` : 'Nenhuma receita cadastrada'}
-            </p>
-            <button onClick={openNewForm} className="mt-3 text-[10px] font-black uppercase tracking-widest text-orange-500 active:scale-95 transition-all">
-              + Cadastrar primeira receita
-            </button>
-          </div>
-        </div>
+        <EmptyState icon={UtensilsCrossed} tone="orange"
+          title={filterCat ? `Nenhuma receita em "${filterCat}"` : 'Nenhuma receita cadastrada'}
+          messages={['O livro de receitas do casal começa aqui. 👩‍🍳', 'Aquela receita de família merece um lugar especial. 🍲']}
+          action={{ label: '+ Cadastrar receita', onClick: openNewForm }} />
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <AnimatePresence>

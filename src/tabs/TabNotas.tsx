@@ -13,6 +13,8 @@ import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../AuthContext';
 import { haptic } from '../utils/haptic';
 import type { Note, NotePayload } from '../types';
+import { EmptyState } from '../components/EmptyState';
+import { StickyNote as EmptyNote } from 'lucide-react';
 
 interface Props {
   notes: Note[];
@@ -258,13 +260,11 @@ export function TabNotas({ notes, showToast, onSaveNote, onDeleteNote }: Props) 
       )}
 
       {notes.length === 0 ? (
-        <p className="text-center text-slate-300 dark:text-slate-600 py-16 font-black uppercase text-[10px] tracking-[0.2em]">
-          Nenhuma nota — crie a primeira acima
-        </p>
+        <EmptyState icon={EmptyNote} tone="amber" title="Nenhuma nota ainda"
+          messages={['Que tal anotar aquela ideia genial antes que ela fuja? ✍️', 'Senha do Wi-Fi, lista de presentes, planos… anote aqui! 📝']} />
       ) : searchTerm && sharedNotes.length === 0 && privateNotes.length === 0 ? (
-        <p className="text-center text-slate-300 dark:text-slate-600 py-10 font-black uppercase text-[10px] tracking-[0.2em]">
-          Nenhuma nota encontrada para "{searchTerm}"
-        </p>
+        <EmptyState icon={Search} tone="slate" title={`Nada encontrado para "${searchTerm}"`} compact
+          messages={['Tente outra palavra.']} />
       ) : null}
 
       {/* ── Notas compartilhadas ── */}

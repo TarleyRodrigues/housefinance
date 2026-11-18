@@ -13,6 +13,8 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Reminder } from '../types';
+import { EmptyState } from '../components/EmptyState';
+import { BellOff as EmptyBell } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Feriados Nacionais Brasileiros
@@ -673,9 +675,8 @@ export function TabAvisos({ reminders, fetchData, showToast, onSave, onDelete }:
       {/* ── 4. LEMBRETES FUTUROS ─────────────────────────────────────────────── */}
       <div className="space-y-3" role="region" aria-label="Próximos lembretes">
         {upcoming.length === 0 ? (
-          <p className="text-center text-slate-300 py-10 font-black uppercase text-[10px] tracking-[0.2em]">
-            Nenhum lembrete futuro
-          </p>
+          <EmptyState icon={EmptyBell} tone="orange" title="Agenda livre" compact
+            messages={['Nada para lembrar por enquanto. Aproveitem! 🌴', 'Nenhum compromisso à vista. ☕']} />
         ) : (
           <AnimatePresence>
             {upcoming.map((rem) => (

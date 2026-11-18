@@ -22,6 +22,9 @@ import { formatCurrency } from '../utils';
 import type { Expense, Category } from '../types';
 import { format, isToday, isYesterday, startOfWeek, endOfWeek, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { EmptyState } from '../components/EmptyState';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { Receipt as EmptyReceipt, SearchX as EmptySearchX } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -353,10 +356,8 @@ function ReceiptGallery({ isOpen, onClose, expenses, currentDate, onViewReceipt 
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-300">
-                <ImageIcon size={48} className="opacity-20" />
-                <p className="font-black uppercase text-[10px] tracking-widest">Nenhum comprovante este mês</p>
-              </div>
+              <EmptyState icon={ImageIcon} tone="slate" title="Nenhum comprovante este mês" compact
+                messages={['Anexe fotos de notas ao lançar um gasto e elas aparecem aqui. 📸']} />
             )}
           </div>
           <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 text-center">
@@ -567,7 +568,7 @@ export function TabExtrato({
           </div>
 
           <h1 className="text-4xl font-black tracking-tighter" aria-live="polite">
-            {formatCurrency(totalFiltered)}
+            <AnimatedNumber value={totalFiltered} />
           </h1>
 
           {/* Métricas rápidas — só quando sem filtro ativo */}
@@ -774,9 +775,17 @@ export function TabExtrato({
         {isLoading ? (
           [1, 2, 3, 4].map((i) => <SkeletonCard key={i} />)
         ) : filtered.length === 0 ? (
-          <p className="text-center text-slate-300 py-20 font-black uppercase text-[10px] tracking-[0.2em]">
-            Nenhum registro encontrado
-          </p>
+          isAnyFilterActive ? (
+            <EmptyState icon={EmptySearchX} tone="slate" title="Nada encontrado"
+              messages={['Nenhum gasto bate com esses filtros. Que tal limpar a busca?']} />
+          ) : (
+            <EmptyState icon={EmptyReceipt} tone="blue" title="Nenhum gasto este mês"
+              messages={[
+                'Mês zerado! Ou vocês viraram monges, ou esqueceram de lançar. 🧘',
+                'Extrato limpinho por aqui. Que milagre! 💸',
+                'Nada gasto ainda — a carteira agradece. 😌',
+              ]} />
+          )
         ) : groupedByDay ? (
           /* ── Agrupado por dia (ordenação por data) ── */
           <AnimatePresence>

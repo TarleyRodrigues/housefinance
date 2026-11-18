@@ -3,6 +3,7 @@ import { History, Plus, Edit, Trash2, ArrowLeft, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Log } from '../types';
+import { EmptyState } from '../components/EmptyState';
 
 interface Props {
   logs: Log[];
@@ -73,7 +74,10 @@ export function TabLogs({ logs, onBack }: Props) {
             </motion.div>
           );
         })}
-        {logs.length === 0 && <p className="text-center text-slate-400 py-20 italic">Nenhuma ação registrada.</p>}
+        {logs.length === 0 && (
+          <EmptyState icon={History} tone="slate" title="Nenhuma ação registrada"
+            messages={['Tudo o que for criado, editado ou apagado aparece aqui.']} />
+        )}
       </div>
     </div>
   );

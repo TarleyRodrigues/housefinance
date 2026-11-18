@@ -13,6 +13,7 @@ import {
   Trash2, Film, Tv, AlertTriangle, Loader2,
   ListPlus, Eye, EyeOff, Star, ArrowUpDown, ArrowRight,
 } from 'lucide-react';
+import { EmptyState } from '../components/EmptyState';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -989,21 +990,21 @@ export function TabFilmes({
           <motion.div
             key="empty"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center py-16 gap-3"
           >
-            {viewMode === 'watched'
-              ? <CheckCircle2 size={36} className="text-slate-300 dark:text-slate-600" />
-              : <Film size={36} className="text-slate-300 dark:text-slate-600" />
-            }
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 dark:text-slate-600 text-center">
-              {viewMode === 'watched'
+            <EmptyState
+              icon={viewMode === 'watched' ? CheckCircle2 : Film}
+              tone="slate"
+              title={viewMode === 'watched'
                 ? 'Nenhum título assistido ainda'
                 : activeCatId === ALL_CAT_ID
                   ? 'Nenhum título pendente'
                   : filterStatus
                     ? `Nenhum título "${STATUS_CONFIG[filterStatus].label}"`
                     : 'Nenhum título nesta categoria'}
-            </p>
+              messages={viewMode === 'watched'
+                ? ['Pipoca pronta, sofá livre. Que tal a primeira sessão? 🍿']
+                : ['Busque um filme ou série e monte a lista do casal. 🎬', 'Pipoca pronta, lista vazia! 🍿']}
+            />
           </motion.div>
         ) : (
           <motion.div

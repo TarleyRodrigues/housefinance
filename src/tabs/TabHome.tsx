@@ -12,6 +12,9 @@ import { ptBR } from 'date-fns/locale';
 import { SkeletonCard } from '../components/ui';
 import { formatCurrency } from '../utils';
 import type { Expense, Category, Reminder, ShoppingItem, Dream, RecurringExpense, WatchlistItem, Note } from '../types';
+import { EmptyState } from '../components/EmptyState';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { Sparkles as EmptySparkles } from 'lucide-react';
 
 const TMDB_W92 = 'https://image.tmdb.org/t/p/w92';
 
@@ -185,15 +188,9 @@ export function TabHome({
           <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">
             {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
           </span>
-          <motion.p
-            key={totalMonth}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="text-5xl font-black tracking-tighter mt-1 leading-none"
-          >
-            {formatCurrency(totalMonth)}
-          </motion.p>
+          <p className="text-5xl font-black tracking-tighter mt-1 leading-none">
+            <AnimatedNumber value={totalMonth} />
+          </p>
 
           <div className="w-12 h-0.5 bg-white/20 rounded-full my-3" />
 
@@ -720,9 +717,12 @@ export function TabHome({
       )}
 
       {expenses.length === 0 && topGoals.length === 0 && upcomingReminders.length === 0 && (
-        <p className="text-center text-slate-300 dark:text-slate-600 py-16 font-black uppercase text-[10px] tracking-[0.2em]">
-          Nenhum dado ainda este mês
-        </p>
+        <EmptyState icon={EmptySparkles} tone="blue" title="Mês novinho em folha"
+          messages={[
+            'Nenhum gasto ainda. Bora lançar o primeiro? ✨',
+            'Página em branco, orçamento intacto. Aproveitem! 🌱',
+          ]}
+          action={{ label: 'Lançar gasto', onClick: () => onNavigate('add') }} />
       )}
     </div>
   );

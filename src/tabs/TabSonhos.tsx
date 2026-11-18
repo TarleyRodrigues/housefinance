@@ -17,7 +17,7 @@ import {
   AlertTriangle, Sparkles, ImagePlus, Camera,
 } from 'lucide-react';
 import { formatCurrency, handleCurrencyInput, parseAmount } from '../utils';
-import type { Dream, Expense } from '../types';
+import type { CelebrationData, Dream, Expense } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipo local — Dream com campos calculados (não vêm do banco)
@@ -391,6 +391,7 @@ interface Props {
   onCompleteDream: (dreamId: string, categoryId: string) => Promise<void>;
   onDeleteDream: (id: string) => Promise<void>;
   onQuickSave: (categoryName: string, amount: number) => Promise<void>;
+  onCelebrate: (data: Omit<CelebrationData, 'id'>) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -398,7 +399,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabSonhos({
   dreams, expenses, fetchData, showToast,
-  onUploadImage, onAddDream, onUpdateDream, onCompleteDream, onDeleteDream, onQuickSave,
+  onUploadImage, onAddDream, onUpdateDream, onCompleteDream, onDeleteDream, onQuickSave, onCelebrate,
 }: Props) {
 
   const [showAdd, setShowAdd]             = useState(false);
@@ -471,13 +472,17 @@ export function TabSonhos({
     if (!confirmComplete) return;
     try {
       await onCompleteDream(confirmComplete.id, confirmComplete.category_id);
-      showToast(`"${confirmComplete.title}" conquistado! 🏆`);
+      onCelebrate({
+        emoji: '🏆',
+        title: `"${confirmComplete.title}" conquistado!`,
+        message: `Meta de ${formatCurrency(confirmComplete.target_value)} alcançada. Sonho realizado! ✨`,
+      });
     } catch {
       showToast('Erro ao concluir', 'error');
     } finally {
       setConfirmComplete(null);
     }
-  }, [confirmComplete, onCompleteDream, showToast]);
+  }, [confirmComplete, onCompleteDream, showToast, onCelebrate]);
 
   const handleDelete = useCallback(async () => {
     if (!confirmDelete) return;

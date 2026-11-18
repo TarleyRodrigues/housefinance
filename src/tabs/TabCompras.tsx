@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../utils';
 import type { ShoppingItem, ShoppingCatalogItem, CatalogPricePoint, ShoppingHistoryItem, ShoppingCategory } from '../types';
+import { EmptyState } from '../components/EmptyState';
+import { ShoppingCart as EmptyCart, SearchX as EmptySearchX } from 'lucide-react';
 
 // Aplica máscara R$ em tempo real: "1690" → "16,90"
 function applyMoneyMask(input: string): string {
@@ -675,9 +677,11 @@ function CatalogSheet({ catalogItems, allCategoriesExternal, onAdd, onCreate, on
         </AnimatePresence>
 
         {filtered.length === 0 && !isCreating && (
-          <p className="text-center text-slate-300 dark:text-slate-600 py-16 font-black uppercase text-[10px] tracking-[0.2em]">
-            {search || activeCategory ? 'Nenhum item encontrado' : 'Catálogo vazio — clique em Novo para começar'}
-          </p>
+          search || activeCategory
+            ? <EmptyState icon={EmptySearchX} tone="slate" title="Nenhum item encontrado" compact
+                messages={['Tente outro nome ou limpe o filtro.']} />
+            : <EmptyState icon={EmptyCart} tone="cyan" title="Catálogo vazio"
+                messages={['Toque em Novo para cadastrar os produtos e acompanhar os preços. 🏷️']} />
         )}
 
         <AnimatePresence initial={false}>
@@ -1323,12 +1327,8 @@ function HistorySheet({ history, onClose, onRefresh }: {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-10">
         {grouped.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 py-24">
-            <History size={36} className="text-slate-200 dark:text-slate-700" />
-            <p className="text-center text-slate-300 dark:text-slate-600 font-black uppercase text-[10px] tracking-[0.2em]">
-              Nenhum item no histórico
-            </p>
-          </div>
+          <EmptyState icon={History} tone="slate" title="Nenhum item no histórico"
+            messages={['As compras concluídas aparecem aqui, com preço e data. 🧾']} />
         ) : grouped.map(({ label, items, total }) => (
           <div key={label}>
             <div className="flex items-center justify-between mb-2 px-1">
@@ -2025,9 +2025,8 @@ export function TabCompras({
         </AnimatePresence>
 
         {pending.length === 0 && shoppingList.length === 0 && (
-          <p className="text-center text-slate-300 py-16 font-black uppercase text-[10px] tracking-[0.2em]">
-            Lista vazia — adicione o primeiro item
-          </p>
+          <EmptyState icon={EmptyCart} tone="cyan" title="Lista vazia"
+            messages={['Geladeira cheia ou memória curta? Adicione o primeiro item. 🛒', 'Nada pra comprar… por enquanto. 🥕']} />
         )}
       </div>
 

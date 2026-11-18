@@ -24,6 +24,7 @@ import { formatCurrency, CHART_COLORS, USER_COLORS } from '../utils';
 import { useGeminiAnalysis } from '../hooks/useGeminiAnalysis';
 import { SpendingHistory } from '../components/SpendingHistory';
 import type { Expense, Category, RecurringExpense, AIAnalysis, HistoryExpense } from '../types';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -529,7 +530,7 @@ export function TabGraficos({
           {/* Total geral */}
           <div className="flex items-end justify-between mb-5">
             <div>
-              <p className="text-4xl font-black tracking-tighter">{formatCurrency(totalAtual)}</p>
+              <p className="text-4xl font-black tracking-tighter"><AnimatedNumber value={totalAtual} /></p>
               <p className="text-[10px] text-white/40 font-bold mt-1 uppercase tracking-widest">Total geral</p>
             </div>
             <div className="flex flex-col items-end gap-1">

@@ -8,6 +8,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, X, Loader2, AlertTriangle, Store, Zap, Link2 } from 'lucide-react';
 import { formatCurrency, handleCurrencyInput, parseAmount } from '../utils';
+import { EmptyState } from './EmptyState';
 import type { Category, ExpenseTemplate, ExpenseTemplatePayload } from '../types';
 
 interface Props {
@@ -350,13 +351,8 @@ export function ExpenseTemplateManager({
       </button>
 
       {templates.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-14 text-slate-300 dark:text-slate-600 text-center">
-          <Zap size={40} strokeWidth={1.5} />
-          <p className="font-black uppercase text-[10px] tracking-widest">Nenhum gasto padrão</p>
-          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 max-w-[16rem] leading-relaxed">
-            Crie atalhos para os gastos que se repetem — no Novo Gasto basta um toque para preencher tudo.
-          </p>
-        </div>
+        <EmptyState icon={Zap} tone="amber" title="Nenhum gasto padrão"
+          messages={['Crie atalhos para os gastos que se repetem — no Novo Gasto basta um toque para preencher tudo. ⚡']} />
       ) : (
         <>
           {orphans.length > 0 && (
