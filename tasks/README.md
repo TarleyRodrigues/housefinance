@@ -47,7 +47,7 @@ O Claude vai ler o arquivo, entender todo o contexto e executar.
 | 011 | [Task-011](Task-011-retrospectiva-do-mes.md) | Retrospectiva do Mês (estilo Wrapped) | CONCLUÍDO |
 | 012 | [Task-012](Task-012-desafios-do-casal.md) | Desafios do Casal | PLANEJADO |
 | 013 | [Task-013](Task-013-reacoes-nos-gastos.md) | Reações nos Gastos | PLANEJADO |
-| 014 | [Task-014](Task-014-lancamento-por-foto-e-voz.md) | Lançamento por Foto da Nota e por Voz | PLANEJADO |
+| 014 | [Task-014](Task-014-lancamento-por-foto-e-voz.md) | Lançamento por Foto da Nota e por Voz | CONCLUÍDO |
 | 015 | [Task-015](Task-015-gestos-swipe.md) | Gestos (Swipe) | PLANEJADO |
 | 016 | [Task-016](Task-016-view-transitions.md) | Transições de Página Nativas | PLANEJADO |
 | 017 | [Task-017](Task-017-atalhos-do-app.md) | Atalhos do App Instalado | PLANEJADO |

@@ -3,11 +3,17 @@
 // ✅ Templates de gastos padrão — auto-preenche o formulário com um clique
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader2, Image as ImageIcon, X, Zap, CalendarDays, Store, CreditCard } from 'lucide-react';
+import { Loader2, Image as ImageIcon, X, Zap, CalendarDays, Store, CreditCard, Camera, Mic, Sparkles } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useExpenseAI } from '../hooks/useExpenseAI';
+import { VoiceExpenseSheet } from '../components/VoiceExpenseSheet';
 import { format, addMonths } from 'date-fns';
 import { haptic } from '../utils/haptic';
 import { handleCurrencyInput, parseAmount, formatCurrency } from '../utils';
-import type { Category, Expense, ExpensePayload, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
+import type { Category, Expense, ExpensePayload, ExpenseSuggestion, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
+
+type AIField = 'amount' | 'category' | 'description' | 'merchant' | 'date';
+const formatBRL = (v: number) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(v);
 
 interface Props {
   categories: Category[];
@@ -71,6 +77,22 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
     return result;
   }, [merchants, expenses]);
 
+  // ── Lançamento com IA (foto da nota / voz) ─────────────────────────────────
+  const ai = useExpenseAI({ categories, merchantNames: allMerchants });
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [aiFields, setAiFields]   = useState<Set<AIField>>(new Set());
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const hl = (f: AIField) => aiFields.has(f)
+    ? 'ring-2 ring-violet-400 dark:ring-violet-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-800'
+    : '';
+
+  // O destaque some depois de alguns segundos
+  useEffect(() => {
+    if (aiFields.size === 0) return;
+    const t = setTimeout(() => setAiFields(new Set()), 9000);
+    return () => clearTimeout(t);
+  }, [aiFields]);
+
   const merchantSuggestions = useMemo(() => {
     const q = merchant.trim().toLowerCase();
     if (!q) return allMerchants.slice(0, 6);
@@ -119,6 +141,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
       setPaymentMonth(defaultPaymentMonth);
     }
     autoMerchantRef.current = null;
+    setAiFields(new Set());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingExpense, duplicateData]);
 
@@ -185,6 +208,65 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
     }
   };
 
+  // Preenche o formulário com a sugestão da IA; devolve false se nada foi reconhecido
+  const applySuggestion = (sug: ExpenseSuggestion): boolean => {
+    const filled = new Set<AIField>();
+    if (sug.amount)      { setAmount(formatBRL(sug.amount)); filled.add('amount'); }
+    if (sug.category)    { setCategory(sug.category); filled.add('category'); }
+    if (sug.description) { setDescription(sug.description); filled.add('description'); }
+    const m = sug.merchant || (sug.category ? defaultMerchantOf(sug.category) : '');
+    if (m)               { setMerchant(m); autoMerchantRef.current = m; filled.add('merchant'); }
+    if (sug.date)        { setDate(sug.date); filled.add('date'); }
+    setAiFields(filled);
+    return filled.size > 0;
+  };
+
+  const summary = (sug: ExpenseSuggestion) =>
+    [sug.amount ? formatCurrency(sug.amount) : null, sug.merchant].filter(Boolean).join(' · ');
+
+  // Foto da nota: lê com IA e anexa como comprovante ao mesmo tempo
+  const handleReceiptAI = async (file: File) => {
+    haptic('light');
+    setUploadingReceipt(true);
+    const [read, upload] = await Promise.allSettled([ai.readReceipt(file), onUploadReceipt(file)]);
+    setUploadingReceipt(false);
+    if (upload.status === 'fulfilled') setReceiptUrl(upload.value);
+
+    if (read.status === 'rejected') {
+      console.error('[IA] nota', read.reason);
+      showToast(upload.status === 'fulfilled'
+        ? 'Não consegui ler a nota agora — a foto ficou anexada. Preencha os campos.'
+        : 'Não consegui ler a nota agora. Tente de novo ou preencha manualmente.', 'error');
+      return;
+    }
+    if (!applySuggestion(read.value)) {
+      showToast('Não reconheci um comprovante nessa foto. Preencha manualmente.', 'info');
+      return;
+    }
+    haptic('success');
+    showToast(read.value.category
+      ? `Nota lida: ${summary(read.value)} — confira e salve ✨`
+      : `Nota lida: ${summary(read.value)} — escolha a categoria`, read.value.category ? 'success' : 'info');
+  };
+
+  // Voz: frase → IA → formulário
+  const handleVoice = async (text: string) => {
+    try {
+      const sug = await ai.parseSpeech(text);
+      if (!applySuggestion(sug)) {
+        showToast('Não entendi um gasto nessa frase. Ex: "50 reais no mercado".', 'info');
+        return;
+      }
+      setVoiceOpen(false);
+      haptic('success');
+      showToast(sug.category ? `Entendi: ${summary(sug)} — confira e salve ✨` : `Entendi: ${summary(sug)} — escolha a categoria`,
+        sug.category ? 'success' : 'info');
+    } catch (err) {
+      console.error('[IA] voz', err);
+      showToast('Não consegui entender agora. Tente de novo.', 'error');
+    }
+  };
+
   const handleReceiptUpload = async (file: File) => {
     setUploadingReceipt(true);
     try {
@@ -238,6 +320,44 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
   return (
     <div className="space-y-4 w-full overflow-x-hidden">
 
+      {/* ── LANÇAR COM IA ──────────────────────────────────────────────────── */}
+      {!editingExpense && ai.available && (
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => receiptInputRef.current?.click()} disabled={!!ai.loading}
+            className="relative overflow-hidden min-h-[64px] p-3.5 rounded-[1.75rem] text-white bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25 flex items-center gap-3 text-left active:scale-95 transition-all disabled:opacity-80">
+            <span className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+              {ai.loading === 'image' ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+            </span>
+            <span className="min-w-0">
+              <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-white/75"><Sparkles size={9} /> Com IA</span>
+              <span className="block font-black text-sm leading-tight">{ai.loading === 'image' ? 'Lendo a nota…' : 'Foto da nota'}</span>
+            </span>
+            {ai.loading === 'image' && (
+              <motion.span className="absolute inset-y-0 w-1/3 bg-white/20 skew-x-12 pointer-events-none"
+                initial={{ x: '-150%' }} animate={{ x: '350%' }} transition={{ duration: 1.3, repeat: Infinity, ease: 'easeInOut' }} />
+            )}
+          </button>
+          <button type="button" onClick={() => setVoiceOpen(true)} disabled={!!ai.loading}
+            className="min-h-[64px] p-3.5 rounded-[1.75rem] text-white bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-lg shadow-violet-500/25 flex items-center gap-3 text-left active:scale-95 transition-all disabled:opacity-80">
+            <span className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+              {ai.loading === 'text' ? <Loader2 size={20} className="animate-spin" /> : <Mic size={20} />}
+            </span>
+            <span className="min-w-0">
+              <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-white/75"><Sparkles size={9} /> Com IA</span>
+              <span className="block font-black text-sm leading-tight">Falar gasto</span>
+            </span>
+          </button>
+          <input ref={receiptInputRef} type="file" accept="image/*" className="hidden" aria-hidden="true" tabIndex={-1}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleReceiptAI(f); }} />
+        </div>
+      )}
+
+      <AnimatePresence>
+        {voiceOpen && (
+          <VoiceExpenseSheet busy={ai.loading === 'text'} onSubmit={handleVoice} onClose={() => setVoiceOpen(false)} />
+        )}
+      </AnimatePresence>
+
       {/* ── TEMPLATES DE GASTOS PADRÃO ─────────────────────────────────────── */}
       {templates.length > 0 && !editingExpense && (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
@@ -281,6 +401,18 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
           {editingExpense ? 'Editar' : duplicateData ? 'Duplicar' : 'Novo'} Registro
         </h3>
 
+        <AnimatePresence>
+          {aiFields.size > 0 && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              className="flex items-center gap-2 text-[11px] font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-2xl px-3.5 py-2.5 -mt-2"
+              role="status"
+            >
+              <Sparkles size={13} className="shrink-0" /> Preenchido pela IA — confira os campos destacados antes de salvar.
+            </motion.p>
+          )}
+        </AnimatePresence>
+
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Valor */}
           <div className="relative">
@@ -290,7 +422,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
               inputMode="numeric"
               placeholder="0,00"
               required
-              className="w-full p-6 pl-16 bg-slate-50 dark:bg-slate-900/50 rounded-3xl text-4xl font-black outline-none text-blue-600 border-2 border-transparent focus:border-blue-500 transition-all shadow-inner dark:text-white"
+              className={`w-full p-6 pl-16 bg-slate-50 dark:bg-slate-900/50 rounded-3xl text-4xl font-black outline-none text-blue-600 border-2 border-transparent focus:border-blue-500 transition-all shadow-inner dark:text-white ${hl('amount')}`}
               value={amount}
               onChange={(e) => setAmount(handleCurrencyInput(e.target.value))}
             />
@@ -301,7 +433,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">
               Categoria {!category && <span className="text-red-400">*</span>}
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid grid-cols-2 gap-2 rounded-2xl transition-shadow ${hl('category')}`}>
               {categories.map((c) => (
                 <button
                   key={c.id}
@@ -332,14 +464,14 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
           <input
             type="text"
             placeholder="O que você comprou?"
-            className="w-full p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200 font-medium"
+            className={`w-full p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200 font-medium transition-shadow ${hl('description')}`}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
 
           {/* Estabelecimento */}
           <div ref={merchantRef} className="relative">
-            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden focus-within:border-blue-300 dark:focus-within:border-blue-700 transition-colors">
+            <div className={`bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden focus-within:border-blue-300 dark:focus-within:border-blue-700 transition-all ${hl('merchant')}`}>
               <label className="flex items-center gap-1.5 px-5 pt-3 pb-1 cursor-pointer">
                 <Store size={12} className="text-slate-400" />
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Estabelecimento (opcional)</span>
@@ -355,7 +487,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
             </div>
             {merchant && merchant === autoMerchantRef.current && (
               <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-1 px-2">
-                Preenchido pelo padrão — pode editar
+                Preenchido automaticamente — pode editar
               </p>
             )}
 
@@ -383,7 +515,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
           </div>
 
           {/* Data do gasto — permite retroativo */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden focus-within:border-blue-300 dark:focus-within:border-blue-700 transition-colors">
+          <div className={`bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden focus-within:border-blue-300 dark:focus-within:border-blue-700 transition-all ${hl('date')}`}>
             <label className="flex items-center gap-1.5 px-5 pt-3 pb-1 cursor-pointer">
               <CalendarDays size={12} className="text-slate-400" />
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Data do gasto</span>

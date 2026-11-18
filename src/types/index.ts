@@ -152,6 +152,32 @@ export interface Log {
 // ─────────────────────────────────────────────────────────────────────────────
 // UI
 // ─────────────────────────────────────────────────────────────────────────────
+// Sugestão de gasto extraída pela IA (foto da nota ou voz) — ver hooks/useExpenseAI
+export interface ExpenseSuggestion {
+  amount: number | null;
+  merchant: string | null;
+  date: string | null;          // yyyy-MM-dd
+  description: string | null;
+  category: string | null;      // sempre uma categoria existente (ou null)
+}
+
+// Web Speech API (não faz parte do lib.dom do TypeScript)
+export interface SpeechRecognitionAlternativeLike { transcript: string }
+export interface SpeechRecognitionResultLike { isFinal: boolean; 0: SpeechRecognitionAlternativeLike; length: number }
+export interface SpeechRecognitionEventLike { resultIndex: number; results: { length: number; [i: number]: SpeechRecognitionResultLike } }
+export interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+export type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
 // Retrospectiva do mês (stories estilo Wrapped) — ver utils/monthRecap
 export interface RecapCategory {
   name: string;
