@@ -23,5 +23,62 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["finance", "lifestyle"]
+  "categories": [
+    "finance",
+    "lifestyle"
+  ],
+  "shortcuts": [
+    {
+      "name": "Novo gasto",
+      "short_name": "Novo gasto",
+      "description": "Lançar um gasto",
+      "url": "/housefinance/#/?tab=add",
+      "icons": [
+        {
+          "src": "./icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Lista de compras",
+      "short_name": "Compras",
+      "description": "Abrir a lista de compras",
+      "url": "/housefinance/#/?tab=shopping",
+      "icons": [
+        {
+          "src": "./icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Extrato do mês",
+      "short_name": "Extrato",
+      "description": "Ver os gastos do mês",
+      "url": "/housefinance/#/?tab=list",
+      "icons": [
+        {
+          "src": "./icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Avisos",
+      "short_name": "Avisos",
+      "description": "Ver lembretes",
+      "url": "/housefinance/#/?tab=reminders",
+      "icons": [
+        {
+          "src": "./icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
 }

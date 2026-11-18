@@ -50,5 +50,5 @@ O Claude vai ler o arquivo, entender todo o contexto e executar.
 | 014 | [Task-014](Task-014-lancamento-por-foto-e-voz.md) | Lançamento por Foto da Nota e por Voz | CONCLUÍDO |
 | 015 | [Task-015](Task-015-gestos-swipe.md) | Gestos (Swipe) | PLANEJADO |
 | 016 | [Task-016](Task-016-view-transitions.md) | Transições de Página Nativas | PLANEJADO |
-| 017 | [Task-017](Task-017-atalhos-do-app.md) | Atalhos do App Instalado | PLANEJADO |
+| 017 | [Task-017](Task-017-atalhos-do-app.md) | Atalhos do App Instalado | CONCLUÍDO |
 | 018 | [Task-018](Task-018-notificacoes-push.md) | Notificações Push | PLANEJADO |

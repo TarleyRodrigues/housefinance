@@ -136,10 +136,22 @@ const TAB_GRADIENT_RGB: Record<string, string> = {
   logs:       '148,163,184',
 };
 
+const SHORTCUT_TABS = new Set(['home', 'list', 'add', 'shopping', 'reminders', 'notes', 'stats', 'recurrent']);
+
 export default function Dashboard() {
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab]     = useState<string>('home');
+  // Atalhos do app instalado (manifest "shortcuts"): #/?tab=add abre direto a aba
+  const [activeTab, setActiveTab]     = useState<string>(() => {
+    const tab = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tab');
+    return tab && SHORTCUT_TABS.has(tab) ? tab : 'home';
+  });
+  // Remove o ?tab= da URL para um recarregar não voltar sempre à mesma aba
+  useEffect(() => {
+    if (window.location.hash.includes('?')) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}#/`);
+    }
+  }, []);
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const [theme, setTheme] = useState<'light' | 'dark' | 'brasil'>(() => {
