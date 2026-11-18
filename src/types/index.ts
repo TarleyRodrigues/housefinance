@@ -153,6 +153,21 @@ export interface Log {
 // ─────────────────────────────────────────────────────────────────────────────
 // UI
 // ─────────────────────────────────────────────────────────────────────────────
+// Selos / conquistas (calculados no app) — ver utils/badges
+export type BadgeExpense = Pick<Expense,
+  'id' | 'amount' | 'category_name' | 'expense_date' | 'payment_month' | 'user_id' | 'merchant' | 'description' | 'receipt_url' | 'created_at'>;
+
+export interface Badge {
+  id: string;
+  emoji: string;
+  title: string;
+  description: string;
+  earned: boolean;
+  progress: number;       // 0–1 (1 quando conquistado)
+  progressLabel?: string; // ex: "2 de 3 meses"
+  tone: 'amber' | 'emerald' | 'blue' | 'violet' | 'rose' | 'orange' | 'cyan';
+}
+
 // Sugestão de gasto extraída pela IA (foto da nota ou voz) — ver hooks/useExpenseAI
 export interface ExpenseSuggestion {
   amount: number | null;

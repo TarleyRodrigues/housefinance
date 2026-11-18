@@ -43,7 +43,7 @@ O Claude vai ler o arquivo, entender todo o contexto e executar.
 | 007 | [Task-007](Task-007-identidade-visual.md) | Identidade Visual — Fonte, cartões e ícones padronizados | PLANEJADO |
 | 008 | [Task-008](Task-008-emoji-icone-por-categoria.md) | Emoji/Ícone por Categoria | CONCLUÍDO |
 | 009 | [Task-009](Task-009-temas-sazonais.md) | Temas Sazonais | PLANEJADO |
-| 010 | [Task-010](Task-010-sequencias-e-selos.md) | Sequências e Selos (Gamificação) | PLANEJADO |
+| 010 | [Task-010](Task-010-sequencias-e-selos.md) | Sequências e Selos (Gamificação) | CONCLUÍDO |
 | 011 | [Task-011](Task-011-retrospectiva-do-mes.md) | Retrospectiva do Mês (estilo Wrapped) | CONCLUÍDO |
 | 012 | [Task-012](Task-012-desafios-do-casal.md) | Desafios do Casal | PLANEJADO |
 | 013 | [Task-013](Task-013-reacoes-nos-gastos.md) | Reações nos Gastos | PLANEJADO |

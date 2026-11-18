@@ -40,6 +40,7 @@ const TabAjustes     = lazy(() => import('../tabs/TabAjustes').then(m     => ({ 
 
 import type { CelebrationData, MonthRecap, Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
+import { computeBadges } from '../utils/badges';
 
 const RECIPE_BUCKET = 'recipe-images';
 
@@ -212,7 +213,7 @@ export default function Dashboard() {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses, historyExpenses, studentCard,
+    aiAnalyses, historyExpenses, studentCard, badgeExpenses,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
     fetchStudentCard, fetchNotes, fetchRecapData,
   } = useDashboardData(currentDate, activeTab);
@@ -271,6 +272,31 @@ export default function Dashboard() {
       });
     }
   }, [isLoading, activeTab, currentDate, categories, prevMonthExpenses, celebrate]);
+
+  // ── Selos ──────────────────────────────────────────────────────────────────
+  const badges = useMemo(
+    () => (badgeExpenses ? computeBadges(badgeExpenses, categories) : []),
+    [badgeExpenses, categories],
+  );
+  // Selo novo → celebra (1x por selo). Na primeira vez só registra, sem festa em massa.
+  useEffect(() => {
+    if (!badgeExpenses || categories.length === 0) return;
+    const earned = badges.filter(b => b.earned);
+    const KEY = 'badges-earned';
+    const raw = localStorage.getItem(KEY);
+    const known = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    const fresh = earned.filter(b => !known.has(b.id));
+    if (fresh.length === 0) return;
+    earned.forEach(b => known.add(b.id));
+    localStorage.setItem(KEY, JSON.stringify([...known]));
+    if (raw === null) return;
+    const b = fresh[0];
+    celebrate({
+      emoji: b.emoji,
+      title: `Nova conquista: ${b.title}!`,
+      message: fresh.length > 1 ? `${b.description} (e mais ${fresh.length - 1} 🎉)` : b.description,
+    });
+  }, [badges, badgeExpenses, categories.length, celebrate]);
 
   const hasTodayReminder = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -1190,7 +1216,7 @@ export default function Dashboard() {
                 recurringExpenses={recurringExpenses}
                 watchlistItems={watchlistItems} notes={notes}
                 currentDate={currentDate} isLoading={isLoading}
-                onNavigate={setActiveTab} onOpenRecap={openRecap} />
+                onNavigate={setActiveTab} onOpenRecap={openRecap} badges={badges} />
             )}
             {activeTab === 'list' && (
               <TabExtrato expenses={expenses} categories={categories} prevMonthTotal={prevMonthTotal}

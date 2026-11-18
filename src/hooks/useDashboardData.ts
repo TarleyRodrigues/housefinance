@@ -13,7 +13,7 @@ import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
   WatchlistCategory, WatchlistItem, Dream, ExpenseTemplate, RecurringExpense, AIAnalysis,
   ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant, HistoryExpense,
-  StudentCard, Log,
+  StudentCard, Log, BadgeExpense,
 } from '../types';
 import { HISTORY_MONTHS } from '../utils';
 import type { WatchlistRating } from '../tabs/Tabfilmes';
@@ -24,7 +24,7 @@ export type { Log } from '../types';
 const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 // Abas que têm dados próprios (carregados ao abrir a aba)
-const TABS_WITH_DATA = new Set(['notes', 'logs', 'movies', 'recipes', 'stats', 'shopping', 'config']);
+const TABS_WITH_DATA = new Set(['home', 'notes', 'logs', 'movies', 'recipes', 'stats', 'shopping', 'config']);
 
 function normalizeProfiles<T extends { profiles?: unknown }>(rows: T[]): T[] {
   return rows.map((row) => ({
@@ -61,6 +61,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [merchants, setMerchants]                     = useState<Merchant[]>([]);
   const [historyExpenses, setHistoryExpenses]         = useState<HistoryExpense[]>([]);
   const [studentCard, setStudentCard]                 = useState<StudentCard | null>(null);
+  const [badgeExpenses, setBadgeExpenses]             = useState<BadgeExpense[] | null>(null);
   const [isLoading, setIsLoading]                     = useState(true);
   const [error, setError]                             = useState<string | null>(null);
 
@@ -253,6 +254,21 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
   }, [currentDate, dates.monthStr]);
 
+  // ── Selos: gastos dos últimos 12 meses (colunas enxutas) ───────────────────
+  const fetchBadgeData = useCallback(async () => {
+    const start = startOfMonth(subMonths(new Date(), 11));
+    const filter = `payment_month.gte.${format(start, 'yyyy-MM')},and(payment_month.is.null,expense_date.gte.${format(start, 'yyyy-MM-dd')})`;
+    const { data, error: badgeErr } = await supabase
+      .from('expenses')
+      .select('id, amount, category_name, expense_date, payment_month, user_id, merchant, description, receipt_url, created_at')
+      .eq('is_deleted', false)
+      .or(filter)
+      .limit(5000);
+    if (badgeErr) { console.error('[useDashboardData] badges', badgeErr); return; }
+    setBadgeExpenses((data ?? []) as BadgeExpense[]);
+    tabCacheRef.current['badges'] = Date.now();
+  }, []);
+
   // ── Retrospectiva: gastos completos de um mês + valores do mês anterior ────
   const fetchRecapData = useCallback(async (month: Date) => {
     const monthFilter = (d: Date) =>
@@ -351,6 +367,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   // ── Dados específicos de cada aba (TTL de 5 min nos mais pesados) ──────────
   const fetchTab = useCallback(async (tab: string): Promise<void> => {
     switch (tab) {
+      case 'home':     if (isTabStale('badges')) await fetchBadgeData(); break;
       case 'notes':    if (isTabStale('notes'))  await fetchNotes(); break;
       case 'logs':     if (isTabStale('logs'))   await fetchLogs(); break;
       case 'movies':   if (isTabStale('movies')) await fetchWatchlist(); break;
@@ -361,7 +378,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       case 'shopping': await Promise.all([fetchShoppingList(), fetchCatalog(), fetchShoppingHistory()]); break;
       case 'config':   await fetchStudentCard(); break;
     }
-  }, [isTabStale, dates.monthStr, fetchNotes, fetchLogs, fetchWatchlist, fetchRecipes, fetchHistory,
+  }, [isTabStale, dates.monthStr, fetchBadgeData, fetchNotes, fetchLogs, fetchWatchlist, fetchRecipes, fetchHistory,
       fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchStudentCard]);
 
   // Contador de cargas em andamento → isLoading (cargas sobrepostas não "piscam")
@@ -401,8 +418,8 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
   // Realtime: parceiro(a) inseriu/atualizou/deletou gastos ou itens da lista de compras.
   // Ref evita recriar o canal a cada troca de mês.
-  const realtimeRef = useRef({ fetchCore, fetchShoppingList, fetchHistory, track });
-  realtimeRef.current = { fetchCore, fetchShoppingList, fetchHistory, track };
+  const realtimeRef = useRef({ fetchCore, fetchShoppingList, fetchHistory, fetchBadgeData, track });
+  realtimeRef.current = { fetchCore, fetchShoppingList, fetchHistory, fetchBadgeData, track };
 
   useEffect(() => {
     if (!user) return;
@@ -416,10 +433,15 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       for (const key of Object.keys(tabCacheRef.current)) {
         if (key.startsWith('history-')) delete tabCacheRef.current[key];
       }
+      delete tabCacheRef.current['badges'];
       clearTimeout(expTimer);
       expTimer = setTimeout(() => {
         const { fetchCore: core, fetchHistory: hist, track: run } = realtimeRef.current;
-        run(() => Promise.all([core(), activeTabRef.current === 'stats' ? hist() : null]));
+        run(() => Promise.all([
+          core(),
+          activeTabRef.current === 'stats' ? hist() : null,
+          activeTabRef.current === 'home' ? realtimeRef.current.fetchBadgeData() : null,
+        ]));
       }, 800);
     };
 
@@ -450,7 +472,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses, historyExpenses, studentCard,
+    aiAnalyses, historyExpenses, studentCard, badgeExpenses,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
     fetchStudentCard, fetchNotes, fetchRecapData,

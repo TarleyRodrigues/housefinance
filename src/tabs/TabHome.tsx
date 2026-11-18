@@ -17,6 +17,8 @@ import { AnimatedNumber } from '../components/AnimatedNumber';
 import { Sparkles as EmptySparkles, ChevronRight } from 'lucide-react';
 import { CategoryEmoji } from '../components/CategoryEmoji';
 import { buildCategoryEmojiMap, categoryEmoji, categoryLabel } from '../utils/categoryEmoji';
+import { BadgeShelf } from '../components/BadgeShelf';
+import type { Badge } from '../types';
 
 const TMDB_W92 = 'https://image.tmdb.org/t/p/w92';
 
@@ -34,6 +36,7 @@ interface Props {
   isLoading: boolean;
   onNavigate: (tab: string) => void;
   onOpenRecap: (month: Date) => void;
+  badges: Badge[];
 }
 
 // Banner da retrospectiva do mês anterior aparece nos primeiros dias do mês
@@ -43,7 +46,7 @@ export function TabHome({
   expenses, prevMonthExpenses, categories, reminders,
   shoppingList, dreams, recurringExpenses,
   watchlistItems, notes,
-  currentDate, isLoading, onNavigate, onOpenRecap,
+  currentDate, isLoading, onNavigate, onOpenRecap, badges,
 }: Props) {
   const today = startOfToday();
 
@@ -254,6 +257,9 @@ export function TabHome({
           </motion.button>
         );
       })()}
+
+      {/* ── Conquistas ────────────────────────────────────────────────────── */}
+      <BadgeShelf badges={badges} />
 
       {/* ── Grid: Compras + Lembretes ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
