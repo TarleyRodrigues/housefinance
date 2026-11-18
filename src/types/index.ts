@@ -180,6 +180,16 @@ export interface ChallengeProgress extends Challenge {
   daysLeft: number;               // dias até o fim (ativo) ou até começar (próximo)
 }
 
+// Reação de um membro do casal a um gasto (tabela expense_reactions)
+export interface ExpenseReaction {
+  expense_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
+export const REACTION_EMOJIS = ['❤️', '😂', '😱', '🙄', '👏', '🤑'] as const;
+
 // Selos / conquistas (calculados no app) — ver utils/badges
 export type BadgeExpense = Pick<Expense,
   'id' | 'amount' | 'category_name' | 'expense_date' | 'payment_month' | 'user_id' | 'merchant' | 'description' | 'receipt_url' | 'created_at'>;

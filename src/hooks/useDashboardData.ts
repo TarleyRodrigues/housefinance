@@ -13,7 +13,7 @@ import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
   WatchlistCategory, WatchlistItem, Dream, ExpenseTemplate, RecurringExpense, AIAnalysis,
   ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant, HistoryExpense,
-  StudentCard, Log, BadgeExpense, Challenge,
+  StudentCard, Log, BadgeExpense, Challenge, ExpenseReaction,
 } from '../types';
 import type { ChallengeExpense } from '../utils/challenges';
 import { HISTORY_MONTHS } from '../utils';
@@ -64,6 +64,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [studentCard, setStudentCard]                 = useState<StudentCard | null>(null);
   const [badgeExpenses, setBadgeExpenses]             = useState<BadgeExpense[] | null>(null);
   const [challenges, setChallenges]                   = useState<Challenge[]>([]);
+  const [reactions, setReactions]                     = useState<ExpenseReaction[]>([]);
   const [challengeExpenses, setChallengeExpenses]     = useState<ChallengeExpense[]>([]);
   const [isLoading, setIsLoading]                     = useState(true);
   const [error, setError]                             = useState<string | null>(null);
@@ -257,6 +258,19 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
   }, [currentDate, dates.monthStr]);
 
+  // ── Reações dos gastos do mês exibido ─────────────────────────────────────
+  // Não bloqueia o app se a tabela não existir.
+  const reactionIdsRef = useRef<string[]>([]);
+  const fetchReactions = useCallback(async (ids?: string[]) => {
+    if (ids) reactionIdsRef.current = ids;
+    const list = reactionIdsRef.current;
+    if (list.length === 0) { setReactions([]); return; }
+    const { data, error: rErr } = await supabase
+      .from('expense_reactions').select('expense_id, user_id, emoji, created_at').in('expense_id', list);
+    if (rErr) { console.error('[useDashboardData] reactions', rErr); return; }
+    setReactions((data ?? []) as ExpenseReaction[]);
+  }, []);
+
   // ── Desafios: lista + gastos do período coberto por eles ──────────────────
   // Não bloqueia o app se a tabela não existir.
   const fetchChallenges = useCallback(async () => {
@@ -364,7 +378,9 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     const pExps = normalizeProfiles((prevRes.data ?? []) as unknown as Expense[]);
     setPrevMonthExpenses(pExps);
     setPrevMonthTotal(pExps.reduce((acc, e) => acc + Number(e.amount), 0));
-    setExpenses(normalizeProfiles((currRes.data ?? []) as unknown as Expense[]));
+    const currentExpenses = normalizeProfiles((currRes.data ?? []) as unknown as Expense[]);
+    setExpenses(currentExpenses);
+    await fetchReactions(currentExpenses.map(e => e.id));
 
     // Mês efetivo considera payment_month quando disponível — soma em uma passada
     const totals = new Array<number>(12).fill(0);
@@ -383,7 +399,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     if (tplRes.error) console.error('[useDashboardData] expense_templates', tplRes.error);
     else setExpenseTemplates((tplRes.data ?? []) as ExpenseTemplate[]);
     if (!analysesRes.error) setAiAnalyses((analysesRes.data ?? []) as AIAnalysis[]);
-  }, [dates, user, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants, fetchChallenges]);
+  }, [dates, user, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants, fetchChallenges, fetchReactions]);
 
   // ── Dados específicos de cada aba (TTL de 5 min nos mais pesados) ──────────
   const fetchTab = useCallback(async (tab: string): Promise<void> => {
@@ -439,8 +455,8 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
 
   // Realtime: parceiro(a) inseriu/atualizou/deletou gastos ou itens da lista de compras.
   // Ref evita recriar o canal a cada troca de mês.
-  const realtimeRef = useRef({ fetchCore, fetchShoppingList, fetchHistory, fetchBadgeData, track });
-  realtimeRef.current = { fetchCore, fetchShoppingList, fetchHistory, fetchBadgeData, track };
+  const realtimeRef = useRef({ fetchCore, fetchShoppingList, fetchHistory, fetchBadgeData, fetchReactions, track });
+  realtimeRef.current = { fetchCore, fetchShoppingList, fetchHistory, fetchBadgeData, fetchReactions, track };
 
   useEffect(() => {
     if (!user) return;
@@ -448,6 +464,12 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     // Debounce para não disparar várias recargas em cascata
     let expTimer: ReturnType<typeof setTimeout>;
     let shopTimer: ReturnType<typeof setTimeout>;
+    let reactTimer: ReturnType<typeof setTimeout>;
+
+    const onReactions = () => {
+      clearTimeout(reactTimer);
+      reactTimer = setTimeout(() => realtimeRef.current.fetchReactions(), 400);
+    };
 
     const onExpenses = () => {
       // Gastos mudaram: invalida o cache do histórico
@@ -478,11 +500,13 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
       .channel('housefinance-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, onExpenses)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_list' }, onShopping)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expense_reactions' }, onReactions)
       .subscribe();
 
     return () => {
       clearTimeout(expTimer);
       clearTimeout(shopTimer);
+      clearTimeout(reactTimer);
       supabase.removeChannel(channel);
     };
   }, [user]);
@@ -494,8 +518,9 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
     aiAnalyses, historyExpenses, studentCard, badgeExpenses, challenges, challengeExpenses,
+    reactions, setReactions,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard, fetchNotes, fetchRecapData, fetchChallenges,
+    fetchStudentCard, fetchNotes, fetchRecapData, fetchChallenges, fetchReactions,
   };
 }

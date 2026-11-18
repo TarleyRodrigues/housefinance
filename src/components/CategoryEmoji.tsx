@@ -27,7 +27,7 @@ export function CategoryEmoji({ emoji, color, size = 'sm', className = '' }: Pro
   return (
     <span
       className={`${SIZES[size]} inline-flex items-center justify-center rounded-full shrink-0 leading-none select-none ${className}`}
-      style={{ backgroundColor: `${c}26`, boxShadow: `inset 0 0 0 1px ${c}40` }}
+      style={{ backgroundImage: `linear-gradient(${c}26, ${c}26)`, boxShadow: `inset 0 0 0 1px ${c}40` }}
       aria-hidden="true"
     >
       {emoji}

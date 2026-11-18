@@ -9,7 +9,7 @@
 // ✅ Modal de confirmação customizado
 // ✅ aria-label em todos os botões (acessibilidade)
 
-import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react';
 import { haptic } from '../utils/haptic';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -27,6 +27,7 @@ import { AnimatedNumber } from '../components/AnimatedNumber';
 import { Receipt as EmptyReceipt, SearchX as EmptySearchX } from 'lucide-react';
 import { CategoryEmoji } from '../components/CategoryEmoji';
 import { buildCategoryEmojiMap, categoryLabel } from '../utils/categoryEmoji';
+import { REACTION_EMOJIS, type ExpenseReaction } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -134,16 +135,51 @@ function ConfirmDeleteModal({ expense, onConfirm, onCancel }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: ExpenseCard — swipe-to-reveal com Copy / Edit / Delete
 // ─────────────────────────────────────────────────────────────────────────────
-const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, categoryEmoji, onEdit, onDelete, onDuplicate, onViewReceipt }: {
+const LONG_PRESS_MS = 450;
+const NO_REACTIONS: ExpenseReaction[] = [];
+
+const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, categoryEmoji, reactions, currentUserId, onReact, onEdit, onDelete, onDuplicate, onViewReceipt }: {
   expense: Expense;
   categoryColor?: string;
   categoryEmoji?: string | null;
+  reactions: ExpenseReaction[];
+  currentUserId: string;
+  onReact: (expenseId: string, emoji: string | null) => void;
   onEdit: (exp: Expense) => void;
   onDelete: (exp: Expense) => void;
   onDuplicate: (exp: Expense) => void;
   onViewReceipt: (url: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [picker, setPicker] = useState(false);
+  const pressRef = useRef<{ timer?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
+  const mine = reactions.find(r => r.user_id === currentUserId)?.emoji ?? null;
+  const grouped = useMemo(() => {
+    const m = new Map<string, { emoji: string; count: number; mine: boolean }>();
+    for (const r of reactions) {
+      const g = m.get(r.emoji) ?? { emoji: r.emoji, count: 0, mine: false };
+      g.count += 1;
+      g.mine = g.mine || r.user_id === currentUserId;
+      m.set(r.emoji, g);
+    }
+    return [...m.values()];
+  }, [reactions, currentUserId]);
+
+  // Segurar o dedo abre as reações; mexer o dedo (arrastar/rolar) cancela
+  const cancelPress = () => clearTimeout(pressRef.current.timer);
+  const onPressStart = (e: React.PointerEvent) => {
+    pressRef.current = { x: e.clientX, y: e.clientY, fired: false };
+    pressRef.current.timer = setTimeout(() => {
+      pressRef.current.fired = true;
+      haptic('medium');
+      setIsOpen(false);
+      setPicker(true);
+    }, LONG_PRESS_MS);
+  };
+  const onPressMove = (e: React.PointerEvent) => {
+    if (Math.abs(e.clientX - pressRef.current.x) > 10 || Math.abs(e.clientY - pressRef.current.y) > 10) cancelPress();
+  };
+  const choose = (emoji: string | null) => { setPicker(false); onReact(expense.id, emoji); };
 
   const avatarUrl =
     expense.profiles?.avatar_url ||
@@ -200,9 +236,14 @@ const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, category
         onDragEnd={(_, info) => {
           setIsOpen(info.offset.x < -50);
         }}
-        onClick={() => { if (isOpen) setIsOpen(false); }}
+        onClick={() => { if (pressRef.current.fired) { pressRef.current.fired = false; return; } if (isOpen) setIsOpen(false); }}
+        onPointerDown={onPressStart}
+        onPointerMove={onPressMove}
+        onPointerUp={cancelPress}
+        onPointerCancel={cancelPress}
+        onContextMenu={(e) => e.preventDefault()}
         className="bg-white dark:bg-slate-800 p-4 flex items-center justify-between transition-colors relative"
-        style={{ userSelect: 'none', touchAction: 'pan-y' }}
+        style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'pan-y' }}
       >
         <div className="flex items-center gap-3 flex-1 overflow-hidden">
           <div className="relative shrink-0">
@@ -270,6 +311,25 @@ const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, category
                 </button>
               )}
             </div>
+
+            {grouped.length > 0 && (
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                {grouped.map(g => (
+                  <button key={g.emoji}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); onReact(expense.id, g.mine ? null : g.emoji); }}
+                    aria-label={g.mine ? `Remover sua reação ${g.emoji}` : `Reagir com ${g.emoji}`}
+                    className={`h-6 min-w-[28px] px-1.5 rounded-full text-xs flex items-center gap-0.5 border transition-all active:scale-90 ${
+                      g.mine
+                        ? 'bg-blue-50 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700'
+                        : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700'
+                    }`}>
+                    <span className="leading-none">{g.emoji}</span>
+                    {g.count > 1 && <span className="text-[9px] font-black text-slate-500 dark:text-slate-400">{g.count}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -286,6 +346,31 @@ const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, category
           )}
         </div>
       </motion.div>
+
+      {/* Barra de reações (segurar o dedo no gasto) */}
+      <AnimatePresence>
+        {picker && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center gap-1 px-2 bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm"
+            role="dialog" aria-label="Reagir ao gasto"
+            onClick={() => setPicker(false)}
+          >
+            {REACTION_EMOJIS.map((em, i) => (
+              <motion.button key={em}
+                initial={{ scale: 0.3, y: 10, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }}
+                transition={{ delay: i * 0.03, type: 'spring', damping: 14, stiffness: 300 }}
+                onClick={(e) => { e.stopPropagation(); choose(mine === em ? null : em); }}
+                aria-label={mine === em ? `Remover reação ${em}` : `Reagir com ${em}`}
+                className={`w-11 h-11 rounded-full text-2xl flex items-center justify-center active:scale-90 transition-transform ${
+                  mine === em ? 'bg-blue-100 dark:bg-blue-900/50 ring-2 ring-blue-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}>
+                {em}
+              </motion.button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 });
@@ -384,6 +469,9 @@ function ReceiptGallery({ isOpen, onClose, expenses, currentDate, onViewReceipt 
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 interface Props {
+  reactions: ExpenseReaction[];
+  currentUserId: string;
+  onReact: (expenseId: string, emoji: string | null) => void;
   expenses: Expense[];
   categories: Category[];
   prevMonthTotal: number;
@@ -400,6 +488,7 @@ interface Props {
 export function TabExtrato({
   expenses, categories, prevMonthTotal, isLoading,
   currentDate, fetchData, showToast, onEdit, onDuplicate, onViewReceipt, onDelete,
+  reactions, currentUserId, onReact,
 }: Props) {
   const [searchTerm, setSearchTerm]           = useState('');
   const [filterUserId, setFilterUserId]       = useState<string | null>(null);
@@ -420,6 +509,12 @@ export function TabExtrato({
     return map;
   }, [categories]);
   const categoryEmojiMap = useMemo(() => buildCategoryEmojiMap(categories), [categories]);
+  // Reações agrupadas por gasto (arrays estáveis para o memo do ExpenseCard)
+  const reactionsByExpense = useMemo(() => {
+    const m = new Map<string, ExpenseReaction[]>();
+    for (const r of reactions) m.set(r.expense_id, [...(m.get(r.expense_id) ?? []), r]);
+    return m;
+  }, [reactions]);
 
   // ── Filtro de período ──────────────────────────────────────────────────────
   const periodFiltered = useMemo(() => {
@@ -808,6 +903,7 @@ export function TabExtrato({
                       expense={exp}
                       categoryColor={categoryColorMap[exp.category_name ?? '']}
                       categoryEmoji={categoryEmojiMap[exp.category_name ?? '']}
+                reactions={reactionsByExpense.get(exp.id) ?? NO_REACTIONS} currentUserId={currentUserId} onReact={onReact}
                       onEdit={onEdit}
                       onDelete={handleDeleteRequest}
                       onDuplicate={onDuplicate}
@@ -827,6 +923,7 @@ export function TabExtrato({
                 expense={exp}
                 categoryColor={categoryColorMap[exp.category_name ?? '']}
                       categoryEmoji={categoryEmojiMap[exp.category_name ?? '']}
+                reactions={reactionsByExpense.get(exp.id) ?? NO_REACTIONS} currentUserId={currentUserId} onReact={onReact}
                 onEdit={onEdit}
                 onDelete={handleDeleteRequest}
                 onDuplicate={onDuplicate}

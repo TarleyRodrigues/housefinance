@@ -215,8 +215,9 @@ export default function Dashboard() {
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
     aiAnalyses, historyExpenses, studentCard, badgeExpenses, challenges, challengeExpenses,
+    reactions, setReactions,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard, fetchNotes, fetchRecapData, fetchChallenges,
+    fetchStudentCard, fetchNotes, fetchRecapData, fetchChallenges, fetchReactions,
   } = useDashboardData(currentDate, activeTab);
 
   // ── Retrospectiva do mês (stories) ────────────────────────────────────────
@@ -273,6 +274,24 @@ export default function Dashboard() {
       });
     }
   }, [isLoading, activeTab, currentDate, categories, prevMonthExpenses, celebrate]);
+
+  // ── Reações nos gastos (otimista: aparece na hora) ─────────────────────────
+  const reactToExpense = useCallback(async (expenseId: string, emoji: string | null) => {
+    if (!user) return;
+    haptic('light');
+    setReactions(prev => {
+      const rest = prev.filter(r => !(r.expense_id === expenseId && r.user_id === user.id));
+      return emoji ? [...rest, { expense_id: expenseId, user_id: user.id, emoji, created_at: new Date().toISOString() }] : rest;
+    });
+    const { error } = emoji
+      ? await supabase.from('expense_reactions').upsert({ expense_id: expenseId, user_id: user.id, emoji }, { onConflict: 'expense_id,user_id' })
+      : await supabase.from('expense_reactions').delete().eq('expense_id', expenseId).eq('user_id', user.id);
+    if (error) {
+      console.error('[reactions]', error);
+      showToast('Não foi possível reagir. Tente novamente.', 'error');
+      fetchReactions();
+    }
+  }, [user, setReactions, showToast, fetchReactions]);
 
   // ── Desafios do casal ─────────────────────────────────────────────────────
   const challengeProgress = useMemo(
@@ -1263,7 +1282,8 @@ export default function Dashboard() {
                 isLoading={isLoading} currentDate={currentDate} fetchData={fetchData}
                 showToast={showToast} onEdit={handleEditExpense}
                 onDuplicate={handleDuplicateExpense}
-                onViewReceipt={setViewingReceipt} onDelete={deleteExpense} />
+                onViewReceipt={setViewingReceipt} onDelete={deleteExpense}
+                reactions={reactions} currentUserId={user?.id ?? ''} onReact={reactToExpense} />
             )}
             {activeTab === 'add' && (
               <TabNovoGasto categories={categories} expenses={expenses} merchants={merchants} editingExpense={editingExpense}
