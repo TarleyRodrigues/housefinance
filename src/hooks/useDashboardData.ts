@@ -13,8 +13,9 @@ import type {
   Expense, Category, ShoppingItem, Reminder, Note, Profile,
   WatchlistCategory, WatchlistItem, Dream, ExpenseTemplate, RecurringExpense, AIAnalysis,
   ShoppingCatalogItem, ShoppingHistoryItem, ShoppingCategory, NotificationEmail, Merchant, HistoryExpense,
-  StudentCard, Log, BadgeExpense,
+  StudentCard, Log, BadgeExpense, Challenge,
 } from '../types';
+import type { ChallengeExpense } from '../utils/challenges';
 import { HISTORY_MONTHS } from '../utils';
 import type { WatchlistRating } from '../tabs/Tabfilmes';
 import type { Recipe } from '../tabs/TabReceitas';
@@ -62,6 +63,8 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
   const [historyExpenses, setHistoryExpenses]         = useState<HistoryExpense[]>([]);
   const [studentCard, setStudentCard]                 = useState<StudentCard | null>(null);
   const [badgeExpenses, setBadgeExpenses]             = useState<BadgeExpense[] | null>(null);
+  const [challenges, setChallenges]                   = useState<Challenge[]>([]);
+  const [challengeExpenses, setChallengeExpenses]     = useState<ChallengeExpense[]>([]);
   const [isLoading, setIsLoading]                     = useState(true);
   const [error, setError]                             = useState<string | null>(null);
 
@@ -254,6 +257,24 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
   }, [currentDate, dates.monthStr]);
 
+  // ── Desafios: lista + gastos do período coberto por eles ──────────────────
+  // Não bloqueia o app se a tabela não existir.
+  const fetchChallenges = useCallback(async () => {
+    const { data, error: chErr } = await supabase
+      .from('challenges').select('*').order('start_date', { ascending: false }).limit(60);
+    if (chErr) { console.error('[useDashboardData] challenges', chErr); return; }
+    const list = (data ?? []) as Challenge[];
+    setChallenges(list);
+    if (list.length === 0) { setChallengeExpenses([]); return; }
+    const from = list.reduce((m, c) => (c.start_date < m ? c.start_date : m), list[0].start_date);
+    const to   = list.reduce((m, c) => (c.end_date > m ? c.end_date : m), list[0].end_date);
+    const { data: exps, error: exErr } = await supabase
+      .from('expenses').select('amount, category_name, expense_date')
+      .eq('is_deleted', false).gte('expense_date', from).lte('expense_date', to).limit(10000);
+    if (exErr) { console.error('[useDashboardData] challenge expenses', exErr); return; }
+    setChallengeExpenses((exps ?? []) as ChallengeExpense[]);
+  }, []);
+
   // ── Selos: gastos dos últimos 12 meses (colunas enxutas) ───────────────────
   const fetchBadgeData = useCallback(async () => {
     const start = startOfMonth(subMonths(new Date(), 11));
@@ -329,7 +350,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
         .gte('reminder_date', remStart).lte('reminder_date', remEnd)
         .order('reminder_date', { ascending: true }),
       // Leves e usados em várias abas — erros tratados dentro de cada função
-      fetchShoppingCategories(), fetchNotificationEmails(), fetchMerchants(),
+      fetchShoppingCategories(), fetchNotificationEmails(), fetchMerchants(), fetchChallenges(),
     ]);
 
     // Essenciais: erro interrompe e aparece para o usuário
@@ -362,7 +383,7 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     if (tplRes.error) console.error('[useDashboardData] expense_templates', tplRes.error);
     else setExpenseTemplates((tplRes.data ?? []) as ExpenseTemplate[]);
     if (!analysesRes.error) setAiAnalyses((analysesRes.data ?? []) as AIAnalysis[]);
-  }, [dates, user, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants]);
+  }, [dates, user, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants, fetchChallenges]);
 
   // ── Dados específicos de cada aba (TTL de 5 min nos mais pesados) ──────────
   const fetchTab = useCallback(async (tab: string): Promise<void> => {
@@ -472,9 +493,9 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses, historyExpenses, studentCard, badgeExpenses,
+    aiAnalyses, historyExpenses, studentCard, badgeExpenses, challenges, challengeExpenses,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard, fetchNotes, fetchRecapData,
+    fetchStudentCard, fetchNotes, fetchRecapData, fetchChallenges,
   };
 }

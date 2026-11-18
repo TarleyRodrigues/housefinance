@@ -153,6 +153,33 @@ export interface Log {
 // ─────────────────────────────────────────────────────────────────────────────
 // UI
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Challenge (Desafios do casal) — tabela challenges
+// ─────────────────────────────────────────────────────────────────────────────
+export interface Challenge {
+  id: string;
+  title: string;
+  emoji: string | null;
+  category_name: string | null;   // null = gasto total do período
+  limit_amount: number;
+  start_date: string;             // yyyy-MM-dd
+  end_date: string;               // yyyy-MM-dd
+  reward: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export type ChallengePayload = Pick<Challenge, 'title' | 'emoji' | 'category_name' | 'limit_amount' | 'start_date' | 'end_date' | 'reward'>;
+
+export type ChallengeStatus = 'upcoming' | 'active' | 'won' | 'lost';
+
+export interface ChallengeProgress extends Challenge {
+  spent: number;
+  pct: number;                    // spent / limit (pode passar de 1)
+  status: ChallengeStatus;
+  daysLeft: number;               // dias até o fim (ativo) ou até começar (próximo)
+}
+
 // Selos / conquistas (calculados no app) — ver utils/badges
 export type BadgeExpense = Pick<Expense,
   'id' | 'amount' | 'category_name' | 'expense_date' | 'payment_month' | 'user_id' | 'merchant' | 'description' | 'receipt_url' | 'created_at'>;

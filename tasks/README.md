@@ -45,7 +45,7 @@ O Claude vai ler o arquivo, entender todo o contexto e executar.
 | 009 | [Task-009](Task-009-temas-sazonais.md) | Temas Sazonais | PLANEJADO |
 | 010 | [Task-010](Task-010-sequencias-e-selos.md) | Sequências e Selos (Gamificação) | CONCLUÍDO |
 | 011 | [Task-011](Task-011-retrospectiva-do-mes.md) | Retrospectiva do Mês (estilo Wrapped) | CONCLUÍDO |
-| 012 | [Task-012](Task-012-desafios-do-casal.md) | Desafios do Casal | PLANEJADO |
+| 012 | [Task-012](Task-012-desafios-do-casal.md) | Desafios do Casal | CONCLUÍDO |
 | 013 | [Task-013](Task-013-reacoes-nos-gastos.md) | Reações nos Gastos | PLANEJADO |
 | 014 | [Task-014](Task-014-lancamento-por-foto-e-voz.md) | Lançamento por Foto da Nota e por Voz | CONCLUÍDO |
 | 015 | [Task-015](Task-015-gestos-swipe.md) | Gestos (Swipe) | PLANEJADO |

@@ -38,9 +38,10 @@ const TabAvisos      = lazy(() => import('../tabs/TabAvisos').then(m      => ({ 
 const MonthRecapStories = lazy(() => import('../components/MonthRecapStories'));
 const TabAjustes     = lazy(() => import('../tabs/TabAjustes').then(m     => ({ default: m.TabAjustes     })));
 
-import type { CelebrationData, MonthRecap, Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
+import type { CelebrationData, ChallengePayload, MonthRecap, Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 import { computeBadges } from '../utils/badges';
+import { computeChallengeProgress } from '../utils/challenges';
 
 const RECIPE_BUCKET = 'recipe-images';
 
@@ -213,9 +214,9 @@ export default function Dashboard() {
     annualChartData, userProfile,
     watchlistCategories, watchlistItems, watchlistRatings, setWatchlistRatings,
     recipes, dreams, expenseTemplates, recurringExpenses,
-    aiAnalyses, historyExpenses, studentCard, badgeExpenses,
+    aiAnalyses, historyExpenses, studentCard, badgeExpenses, challenges, challengeExpenses,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard, fetchNotes, fetchRecapData,
+    fetchStudentCard, fetchNotes, fetchRecapData, fetchChallenges,
   } = useDashboardData(currentDate, activeTab);
 
   // ── Retrospectiva do mês (stories) ────────────────────────────────────────
@@ -272,6 +273,44 @@ export default function Dashboard() {
       });
     }
   }, [isLoading, activeTab, currentDate, categories, prevMonthExpenses, celebrate]);
+
+  // ── Desafios do casal ─────────────────────────────────────────────────────
+  const challengeProgress = useMemo(
+    () => computeChallengeProgress(challenges, challengeExpenses),
+    [challenges, challengeExpenses],
+  );
+  const saveChallenge = useCallback(async (payload: ChallengePayload, id: string | null) => {
+    if (!user) throw new Error('Não autenticado');
+    const { error } = id
+      ? await supabase.from('challenges').update(payload).eq('id', id)
+      : await supabase.from('challenges').insert({ ...payload, created_by: user.id });
+    if (error) { showToast('Erro ao salvar o desafio. Tente novamente.', 'error'); throw error; }
+    await fetchChallenges();
+    showToast(id ? 'Desafio atualizado!' : 'Desafio lançado! Boa sorte 💪');
+  }, [user, fetchChallenges, showToast]);
+  const deleteChallenge = useCallback(async (id: string) => {
+    const { error } = await supabase.from('challenges').delete().eq('id', id);
+    if (error) { showToast('Erro ao apagar o desafio.', 'error'); throw error; }
+    await fetchChallenges();
+    showToast('Desafio apagado', 'info');
+  }, [fetchChallenges, showToast]);
+  // Desafio vencido → confete (1x por desafio)
+  useEffect(() => {
+    const won = challengeProgress.filter(c => c.status === 'won');
+    if (won.length === 0) return;
+    const KEY = 'challenges-celebrated';
+    const known = new Set<string>(JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[]);
+    const fresh = won.filter(c => !known.has(c.id));
+    if (fresh.length === 0) return;
+    fresh.forEach(c => known.add(c.id));
+    localStorage.setItem(KEY, JSON.stringify([...known]));
+    const c = fresh[0];
+    celebrate({
+      emoji: c.emoji ?? '🏆',
+      title: `Desafio vencido: ${c.title}!`,
+      message: c.reward ? `Gastaram ${formatCurrency(c.spent)} de ${formatCurrency(c.limit_amount)}. Hora do prêmio: ${c.reward} 🎁` : `Gastaram ${formatCurrency(c.spent)} de ${formatCurrency(c.limit_amount)}. Mandaram bem!`,
+    });
+  }, [challengeProgress, celebrate]);
 
   // ── Selos ──────────────────────────────────────────────────────────────────
   const badges = useMemo(
@@ -1216,7 +1255,8 @@ export default function Dashboard() {
                 recurringExpenses={recurringExpenses}
                 watchlistItems={watchlistItems} notes={notes}
                 currentDate={currentDate} isLoading={isLoading}
-                onNavigate={setActiveTab} onOpenRecap={openRecap} badges={badges} />
+                onNavigate={setActiveTab} onOpenRecap={openRecap} badges={badges}
+                challenges={challengeProgress} onSaveChallenge={saveChallenge} onDeleteChallenge={deleteChallenge} />
             )}
             {activeTab === 'list' && (
               <TabExtrato expenses={expenses} categories={categories} prevMonthTotal={prevMonthTotal}

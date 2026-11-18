@@ -19,6 +19,8 @@ import { CategoryEmoji } from '../components/CategoryEmoji';
 import { buildCategoryEmojiMap, categoryEmoji, categoryLabel } from '../utils/categoryEmoji';
 import { BadgeShelf } from '../components/BadgeShelf';
 import type { Badge } from '../types';
+import { ChallengesCard } from '../components/ChallengesCard';
+import type { ChallengePayload, ChallengeProgress } from '../types';
 
 const TMDB_W92 = 'https://image.tmdb.org/t/p/w92';
 
@@ -37,6 +39,9 @@ interface Props {
   onNavigate: (tab: string) => void;
   onOpenRecap: (month: Date) => void;
   badges: Badge[];
+  challenges: ChallengeProgress[];
+  onSaveChallenge: (payload: ChallengePayload, id: string | null) => Promise<void>;
+  onDeleteChallenge: (id: string) => Promise<void>;
 }
 
 // Banner da retrospectiva do mês anterior aparece nos primeiros dias do mês
@@ -47,6 +52,7 @@ export function TabHome({
   shoppingList, dreams, recurringExpenses,
   watchlistItems, notes,
   currentDate, isLoading, onNavigate, onOpenRecap, badges,
+  challenges, onSaveChallenge, onDeleteChallenge,
 }: Props) {
   const today = startOfToday();
 
@@ -257,6 +263,10 @@ export function TabHome({
           </motion.button>
         );
       })()}
+
+      {/* ── Desafios do casal ─────────────────────────────────────────────── */}
+      <ChallengesCard challenges={challenges} categories={categories}
+        onSave={onSaveChallenge} onDelete={onDeleteChallenge} />
 
       {/* ── Conquistas ────────────────────────────────────────────────────── */}
       <BadgeShelf badges={badges} />
