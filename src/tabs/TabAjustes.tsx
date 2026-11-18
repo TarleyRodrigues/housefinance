@@ -21,6 +21,9 @@ import type {
   Category, Profile, Expense, ShoppingCategory, NotificationEmail, Merchant,
   StudentCard, StudentCardPayload,
 } from '../types';
+import { CategoryEmoji } from '../components/CategoryEmoji';
+import { EmojiPickerSheet } from '../components/EmojiPickerSheet';
+import { categoryEmoji, categoryLabel } from '../utils/categoryEmoji';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Paleta de cores
@@ -93,7 +96,7 @@ interface CategoryManagerProps {
   onAdd: (name: string) => Promise<void>;
   onUpdate: (payload: {
     id: string; name?: string; oldName?: string;
-    monthly_goal?: number; color?: string; type?: string; default_merchant?: string | null;
+    monthly_goal?: number; color?: string; type?: string; default_merchant?: string | null; emoji?: string | null;
   }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   showToast: (msg: string, type?: string) => void;
@@ -105,6 +108,7 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
   const [newCat, setNewCat]                 = useState('');
   const [savingFields, setSavingFields]     = useState<Record<string, boolean>>({});
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [emojiFor, setEmojiFor]             = useState<Category | null>(null);
   const [openColorFor, setOpenColorFor]     = useState<string | null>(null);
   const [names, setNames]                   = useState<Record<string, string>>(() =>
     Object.fromEntries(categories.map((c) => [c.id, c.name]))
@@ -253,6 +257,11 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
                 }`}
               >
                 <div className="flex justify-between items-center gap-2">
+                  <button type="button" onClick={() => setEmojiFor(c)}
+                    aria-label={`Trocar emoji de ${categoryLabel(c.name)}`}
+                    className="min-w-[44px] min-h-[44px] -my-1 flex items-center justify-center rounded-2xl active:scale-90 transition-transform">
+                    <CategoryEmoji emoji={categoryEmoji(c.name, c.emoji)} color={c.color} size="md" />
+                  </button>
                   <div className="flex-1 relative">
                     <label htmlFor={`cat-name-${c.id}`} className="sr-only">Nome da categoria {c.name}</label>
                     <input
@@ -431,6 +440,28 @@ function CategoryManager({ categories, onAdd, onUpdate, onDelete, showToast, fet
           })}
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {emojiFor && (
+          <EmojiPickerSheet
+            categoryName={emojiFor.name}
+            current={emojiFor.emoji ?? null}
+            color={emojiFor.color}
+            onSelect={async (emoji) => {
+              try {
+                await onUpdate({ id: emojiFor.id, emoji });
+                showSaved(`name-${emojiFor.id}`);
+                fetchData();
+              } catch (err) {
+                const { code } = (err as { code?: string }) ?? {};
+                showToast(code === 'PGRST204' ? 'Falta a coluna "emoji" no banco' : 'Erro ao salvar emoji', 'error');
+                throw err;
+              }
+            }}
+            onClose={() => setEmojiFor(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <datalist id="category-merchant-list">
         {merchantNames.map((m) => <option key={m} value={m} />)}
@@ -938,7 +969,7 @@ interface Props {
   onAddCategory: (name: string) => Promise<void>;
   onUpdateCategory: (payload: {
     id: string; name?: string; oldName?: string;
-    monthly_goal?: number; color?: string; type?: string; default_merchant?: string | null;
+    monthly_goal?: number; color?: string; type?: string; default_merchant?: string | null; emoji?: string | null;
   }) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
   onAddShoppingCategory: (name: string) => Promise<void>;

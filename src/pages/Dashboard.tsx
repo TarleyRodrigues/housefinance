@@ -635,9 +635,9 @@ export default function Dashboard() {
     if (error) throw error;
   }, []);
 
-  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color, type, default_merchant }: {
+  const updateCategory = useCallback(async ({ id, name, oldName, monthly_goal, color, type, default_merchant, emoji }: {
     id: string; name?: string; oldName?: string; monthly_goal?: number; color?: string; type?: string;
-    default_merchant?: string | null;
+    default_merchant?: string | null; emoji?: string | null;
   }) => {
     const updates: Record<string, unknown> = {};
     if (name !== undefined)             updates.name             = name;
@@ -645,6 +645,7 @@ export default function Dashboard() {
     if (color !== undefined)            updates.color            = color;
     if (type !== undefined)             updates.type             = type;
     if (default_merchant !== undefined) updates.default_merchant = default_merchant;
+    if (emoji !== undefined)            updates.emoji            = emoji;
     const { error } = await supabase.from('categories').update(updates).eq('id', id);
     if (error) throw error;
     if (name && oldName && name !== oldName) {

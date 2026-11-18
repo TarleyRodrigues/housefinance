@@ -86,6 +86,7 @@ export interface Category {
   color?: string;
   is_active: boolean;
   type?: 'couple' | 'individual';
+  emoji?: string | null;            // emoji personalizado — null = emoji do início do nome / sugestão
   default_merchant?: string | null; // fornecedor padrão (ex: Energia → Enel) — alter table categories add column if not exists default_merchant text;
 }
 

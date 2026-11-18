@@ -25,6 +25,8 @@ import { ptBR } from 'date-fns/locale';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { Receipt as EmptyReceipt, SearchX as EmptySearchX } from 'lucide-react';
+import { CategoryEmoji } from '../components/CategoryEmoji';
+import { buildCategoryEmojiMap, categoryLabel } from '../utils/categoryEmoji';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -132,9 +134,10 @@ function ConfirmDeleteModal({ expense, onConfirm, onCancel }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: ExpenseCard — swipe-to-reveal com Copy / Edit / Delete
 // ─────────────────────────────────────────────────────────────────────────────
-const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, onEdit, onDelete, onDuplicate, onViewReceipt }: {
+const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, categoryEmoji, onEdit, onDelete, onDuplicate, onViewReceipt }: {
   expense: Expense;
   categoryColor?: string;
+  categoryEmoji?: string | null;
   onEdit: (exp: Expense) => void;
   onDelete: (exp: Expense) => void;
   onDuplicate: (exp: Expense) => void;
@@ -202,13 +205,19 @@ const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, onEdit, 
         style={{ userSelect: 'none', touchAction: 'pan-y' }}
       >
         <div className="flex items-center gap-3 flex-1 overflow-hidden">
-          <img
-            src={avatarUrl}
-            className="w-12 h-12 rounded-2xl object-cover border-2 border-slate-50 dark:border-slate-700 shadow-sm shrink-0"
-            alt={`Avatar de ${expense.profiles?.full_name ?? 'usuário'}`}
-            loading="lazy"
-            decoding="async"
-          />
+          <div className="relative shrink-0">
+            <img
+              src={avatarUrl}
+              className="w-12 h-12 rounded-2xl object-cover border-2 border-slate-50 dark:border-slate-700 shadow-sm"
+              alt={`Avatar de ${expense.profiles?.full_name ?? 'usuário'}`}
+              loading="lazy"
+              decoding="async"
+            />
+            {categoryEmoji && (
+              <CategoryEmoji emoji={categoryEmoji} color={categoryColor} size="xs"
+                className="absolute -bottom-1 -right-1 bg-white dark:bg-slate-800 ring-2 ring-white dark:ring-slate-800" />
+            )}
+          </div>
           <div className="flex flex-col min-w-0">
             <span
               className="text-[9px] font-black uppercase tracking-widest leading-none mb-1 px-1.5 py-0.5 rounded-md w-fit"
@@ -219,7 +228,7 @@ const ExpenseCard = memo(function ExpenseCard({ expense, categoryColor, onEdit, 
               }
             >
               <span className={!categoryColor ? 'text-blue-500' : undefined}>
-                {expense.category_name}
+                {categoryLabel(expense.category_name)}
               </span>
             </span>
 
@@ -410,6 +419,7 @@ export function TabExtrato({
     categories.forEach((c) => { map[c.name] = c.color ?? undefined; });
     return map;
   }, [categories]);
+  const categoryEmojiMap = useMemo(() => buildCategoryEmojiMap(categories), [categories]);
 
   // ── Filtro de período ──────────────────────────────────────────────────────
   const periodFiltered = useMemo(() => {
@@ -797,6 +807,7 @@ export function TabExtrato({
                       key={exp.id}
                       expense={exp}
                       categoryColor={categoryColorMap[exp.category_name ?? '']}
+                      categoryEmoji={categoryEmojiMap[exp.category_name ?? '']}
                       onEdit={onEdit}
                       onDelete={handleDeleteRequest}
                       onDuplicate={onDuplicate}
@@ -815,6 +826,7 @@ export function TabExtrato({
                 key={exp.id}
                 expense={exp}
                 categoryColor={categoryColorMap[exp.category_name ?? '']}
+                      categoryEmoji={categoryEmojiMap[exp.category_name ?? '']}
                 onEdit={onEdit}
                 onDelete={handleDeleteRequest}
                 onDuplicate={onDuplicate}

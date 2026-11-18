@@ -15,6 +15,7 @@ import { ExpenseTemplateManager } from '../components/ExpenseTemplateManager';
 import type { RecurringExpense, Category, Expense, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedNumber } from '../components/AnimatedNumber';
+import { buildCategoryEmojiMap, categoryLabel } from '../utils/categoryEmoji';
 
 // ─── tipos locais ─────────────────────────────────────────────────────────────
 
@@ -407,9 +408,10 @@ function InstallmentForm({ categories, onSave, onClose }: {
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: RecurringCard — assinatura
 // ─────────────────────────────────────────────────────────────────────────────
-function RecurringCard({ item, categoryColor, isLaunched, onEdit, onDelete, onToggle, onLaunch, onHistory }: {
+function RecurringCard({ item, categoryColor, categoryEmoji, isLaunched, onEdit, onDelete, onToggle, onLaunch, onHistory }: {
   item: RecurringExpense;
   categoryColor?: string;
+  categoryEmoji?: string | null;
   isLaunched: boolean;
   onEdit: (item: RecurringExpense) => void;
   onDelete: (item: RecurringExpense) => void;
@@ -427,13 +429,15 @@ function RecurringCard({ item, categoryColor, isLaunched, onEdit, onDelete, onTo
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{ backgroundColor: (categoryColor ?? '#8b5cf6') + '20' }}>
-          <Repeat2 size={18} style={{ color: categoryColor ?? '#8b5cf6' }} />
+          {categoryEmoji
+            ? <span className="text-xl leading-none" aria-hidden="true">{categoryEmoji}</span>
+            : <Repeat2 size={18} style={{ color: categoryColor ?? '#8b5cf6' }} />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md"
               style={{ backgroundColor: (categoryColor ?? '#8b5cf6') + '25', color: categoryColor ?? '#8b5cf6' }}>
-              {item.category_name}
+              {categoryLabel(item.category_name)}
             </span>
             <span className="text-[9px] text-slate-400 font-bold">· dia {item.day_of_month}</span>
           </div>
@@ -482,9 +486,10 @@ function RecurringCard({ item, categoryColor, isLaunched, onEdit, onDelete, onTo
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB: InstallmentCard — parcelamento
 // ─────────────────────────────────────────────────────────────────────────────
-function InstallmentCard({ item, categoryColor, paidCount, nextDate, onHistory, onDelete }: {
+function InstallmentCard({ item, categoryColor, categoryEmoji, paidCount, nextDate, onHistory, onDelete }: {
   item: RecurringExpense;
   categoryColor?: string;
+  categoryEmoji?: string | null;
   paidCount: number;
   nextDate: string | null;
   onHistory: (item: RecurringExpense) => void;
@@ -503,13 +508,15 @@ function InstallmentCard({ item, categoryColor, paidCount, nextDate, onHistory, 
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{ backgroundColor: (categoryColor ?? '#3b82f6') + '20' }}>
-          <CreditCard size={18} style={{ color: categoryColor ?? '#3b82f6' }} />
+          {categoryEmoji
+            ? <span className="text-xl leading-none" aria-hidden="true">{categoryEmoji}</span>
+            : <CreditCard size={18} style={{ color: categoryColor ?? '#3b82f6' }} />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md"
               style={{ backgroundColor: (categoryColor ?? '#3b82f6') + '25', color: categoryColor ?? '#3b82f6' }}>
-              {item.category_name}
+              {categoryLabel(item.category_name)}
             </span>
             {isDone
               ? <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md">Concluído</span>
@@ -594,6 +601,7 @@ export function TabRecorrentes({
     categories.forEach(c => { map[c.name] = c.color ?? undefined; });
     return map;
   }, [categories]);
+  const categoryEmojiMap = useMemo(() => buildCategoryEmojiMap(categories), [categories]);
 
   const launchedIds = useMemo(() => {
     const prefix = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
@@ -831,6 +839,7 @@ export function TabRecorrentes({
                 {activeSubs.map(item => (
                   <RecurringCard key={item.id} item={item}
                     categoryColor={categoryColorMap[item.category_name]}
+                    categoryEmoji={categoryEmojiMap[item.category_name]}
                     isLaunched={launchedIds.has(item.id)}
                     onEdit={i => { setEditingItem(i); setShowSubForm(true); }}
                     onDelete={setDeletingItem}
@@ -860,6 +869,7 @@ export function TabRecorrentes({
                     {inactiveSubs.map(item => (
                       <RecurringCard key={item.id} item={item}
                         categoryColor={categoryColorMap[item.category_name]}
+                    categoryEmoji={categoryEmojiMap[item.category_name]}
                         isLaunched={launchedIds.has(item.id)}
                         onEdit={i => { setEditingItem(i); setShowSubForm(true); }}
                         onDelete={setDeletingItem}
@@ -887,6 +897,7 @@ export function TabRecorrentes({
                   return (
                     <InstallmentCard key={item.id} item={item}
                       categoryColor={categoryColorMap[item.category_name]}
+                    categoryEmoji={categoryEmojiMap[item.category_name]}
                       paidCount={stats.paidCount}
                       nextDate={stats.nextDate}
                       onHistory={setHistoryItem}

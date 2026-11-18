@@ -41,7 +41,7 @@ O Claude vai ler o arquivo, entender todo o contexto e executar.
 | 005 | [Task-005](Task-005-alexa-rotinas-voice-monkey.md) | Rotinas Amazon Alexa — Voice Monkey | PLANEJADO |
 | 006 | [Task-006](Task-006-pacote-visual-1-contagem-celebracao-vazios.md) | Pacote Visual 1 — Contagem animada, celebração e telas vazias | CONCLUÍDO |
 | 007 | [Task-007](Task-007-identidade-visual.md) | Identidade Visual — Fonte, cartões e ícones padronizados | PLANEJADO |
-| 008 | [Task-008](Task-008-emoji-icone-por-categoria.md) | Emoji/Ícone por Categoria | PLANEJADO |
+| 008 | [Task-008](Task-008-emoji-icone-por-categoria.md) | Emoji/Ícone por Categoria | CONCLUÍDO |
 | 009 | [Task-009](Task-009-temas-sazonais.md) | Temas Sazonais | PLANEJADO |
 | 010 | [Task-010](Task-010-sequencias-e-selos.md) | Sequências e Selos (Gamificação) | PLANEJADO |
 | 011 | [Task-011](Task-011-retrospectiva-do-mes.md) | Retrospectiva do Mês (estilo Wrapped) | CONCLUÍDO |

@@ -15,6 +15,8 @@ import type { Expense, Category, Reminder, ShoppingItem, Dream, RecurringExpense
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { Sparkles as EmptySparkles, ChevronRight } from 'lucide-react';
+import { CategoryEmoji } from '../components/CategoryEmoji';
+import { buildCategoryEmojiMap, categoryEmoji, categoryLabel } from '../utils/categoryEmoji';
 
 const TMDB_W92 = 'https://image.tmdb.org/t/p/w92';
 
@@ -118,6 +120,8 @@ export function TabHome({
       })
       .slice(0, 5),
   [expenses]);
+
+  const emojiMap = useMemo(() => buildCategoryEmojiMap(categories), [categories]);
 
   const categoryColorMap = useMemo(() => {
     const map: Record<string, string | undefined> = {};
@@ -529,8 +533,8 @@ export function TabHome({
             >
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color ?? '#3b82f6' }} />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{cat.name}</span>
+                  <CategoryEmoji emoji={categoryEmoji(cat.name, cat.emoji)} color={cat.color} size="sm" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{categoryLabel(cat.name)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg ${
@@ -723,12 +727,17 @@ export function TabHome({
                   transition={{ delay: i * 0.06, duration: 0.3 }}
                   className="flex items-center gap-3"
                 >
+                  <div className="relative shrink-0">
                   {avatarUrl
                     ? <img src={avatarUrl} className="w-9 h-9 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-700" alt={exp.profiles?.full_name} loading="lazy" decoding="async" />
                     : <div className="w-9 h-9 rounded-2xl shrink-0 flex items-center justify-center border" style={{ backgroundColor: color + '18', borderColor: color + '30' }}>
                         <span className="text-[11px] font-black" style={{ color }}>{initial}</span>
-                      </div>
-                  }
+                      </div>}
+                    {emojiMap[exp.category_name ?? ''] && (
+                      <CategoryEmoji emoji={emojiMap[exp.category_name ?? '']} color={color} size="xs"
+                        className="absolute -bottom-1 -right-1 !w-4 !h-4 !text-[9px] bg-white dark:bg-slate-800 ring-2 ring-white dark:ring-slate-800" />
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate leading-tight">

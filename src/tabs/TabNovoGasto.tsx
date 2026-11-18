@@ -11,6 +11,7 @@ import { format, addMonths } from 'date-fns';
 import { haptic } from '../utils/haptic';
 import { handleCurrencyInput, parseAmount, formatCurrency } from '../utils';
 import type { Category, Expense, ExpensePayload, ExpenseSuggestion, ExpenseTemplate, ExpenseTemplatePayload, Merchant } from '../types';
+import { categoryEmoji, categoryLabel } from '../utils/categoryEmoji';
 
 type AIField = 'amount' | 'category' | 'description' | 'merchant' | 'date';
 const formatBRL = (v: number) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(v);
@@ -439,7 +440,7 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                   key={c.id}
                   type="button"
                   onClick={() => selectCategory(c.name)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 text-left ${
+                  className={`flex items-center gap-1.5 px-2.5 py-2.5 min-h-[48px] rounded-2xl border text-[10px] font-black uppercase tracking-normal transition-all active:scale-95 text-left ${
                     category === c.name
                       ? 'border-transparent text-white shadow-md'
                       : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300'
@@ -450,11 +451,14 @@ export function TabNovoGasto({ categories, expenses, merchants, editingExpense, 
                       : {}
                   }
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: c.color ?? '#64748b', opacity: category === c.name ? 0.7 : 1 }}
-                  />
-                  <span className="truncate">{c.name}</span>
+                  {categoryEmoji(c.name, c.emoji)
+                    ? <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm leading-none shrink-0 ${category === c.name ? 'bg-white/25' : ''}`}
+                        style={category === c.name ? undefined : { backgroundColor: `${c.color ?? '#64748b'}26` }} aria-hidden="true">
+                        {categoryEmoji(c.name, c.emoji)}
+                      </span>
+                    : <span className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: c.color ?? '#64748b', opacity: category === c.name ? 0.7 : 1 }} />}
+                  <span className="line-clamp-2 leading-tight min-w-0">{categoryLabel(c.name)}</span>
                 </button>
               ))}
             </div>
