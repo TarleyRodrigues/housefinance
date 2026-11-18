@@ -5,7 +5,7 @@
 // ✅ Optimistic updates na lista de compras (toggle/delete/clearDone instantâneos)
 // ✅ Templates de gastos padrão — add/delete via TabAjustes
 
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, RefreshCcw, X, Moon, Sun, Minimize2 } from 'lucide-react';
@@ -44,6 +44,7 @@ import { computeBadges } from '../utils/badges';
 import { computeChallengeProgress } from '../utils/challenges';
 import { SeasonalOverlay } from '../components/SeasonalOverlay';
 import { SPECIAL_THEMES, type ThemeName } from '../types';
+import { runViewTransition } from '../utils/viewTransition';
 
 const RECIPE_BUCKET = 'recipe-images';
 
@@ -187,9 +188,13 @@ export default function Dashboard() {
     setAnniversary(date);
     if (date) localStorage.setItem('couple-anniversary', date); else localStorage.removeItem('couple-anniversary');
   }, []);
+  // Troca de tema com revelação circular a partir do ponto tocado
+  const changeTheme = useCallback((next: ThemeName, origin?: { x: number; y: number }) => {
+    runViewTransition(() => setTheme(next), origin);
+  }, []);
   const isAnniversaryToday = !!anniversary && anniversary.slice(5) === format(new Date(), 'MM-dd');
   const effectiveTheme: ThemeName = isAnniversaryToday ? 'amor' : theme;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('dark', ...SPECIAL_THEMES);
     if (effectiveTheme !== 'light') root.classList.add('dark');
@@ -420,6 +425,8 @@ export default function Dashboard() {
     return reminders.some(r => r.reminder_date === todayStr);
   }, [reminders]);
 
+  // Direção da troca de mês (anima o nome deslizando para o lado certo)
+  const [monthDir, setMonthDir] = useState<1 | -1>(1);
   const prevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
@@ -1284,13 +1291,35 @@ export default function Dashboard() {
 
           {/* Navegação de mês */}
           <div className="flex items-center gap-1 flex-1 justify-center min-w-0">
-            <button onClick={prevMonth} aria-label="Mês anterior" className="p-1.5 active:scale-90 transition-transform shrink-0">
+            <button onClick={() => { setMonthDir(-1); prevMonth(); }} aria-label="Mês anterior" className="min-w-[44px] min-h-[44px] -mx-1.5 flex items-center justify-center active:scale-90 transition-transform shrink-0">
               <ChevronLeft size={18} className="text-slate-400" />
             </button>
-            <div className="flex flex-col items-center min-w-0">
-              <h2 className="font-black text-base capitalize leading-none text-slate-800 dark:text-white truncate">
-                {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
-              </h2>
+            {/* Arraste o mês para os lados para trocar */}
+            <motion.div
+              className="flex flex-col items-center min-w-0 cursor-grab active:cursor-grabbing touch-pan-y"
+              drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.35} dragSnapToOrigin
+              onDragEnd={(_, info) => {
+                const swipe = Math.abs(info.offset.x) > 50 || Math.abs(info.velocity.x) > 400;
+                if (!swipe) return;
+                haptic('light');
+                if (info.offset.x < 0) { setMonthDir(1); nextMonth(); } else { setMonthDir(-1); prevMonth(); }
+              }}
+            >
+              <div className="relative overflow-hidden">
+                <AnimatePresence mode="popLayout" initial={false} custom={monthDir}>
+                  <motion.h2
+                    key={format(currentDate, 'yyyy-MM')}
+                    custom={monthDir}
+                    initial={{ x: monthDir * 24, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: monthDir * -24, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="font-black text-base capitalize leading-none text-slate-800 dark:text-white truncate select-none"
+                  >
+                    {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+                  </motion.h2>
+                </AnimatePresence>
+              </div>
               <button
                 onClick={handleManualRefresh}
                 disabled={manualRefreshing}
@@ -1300,15 +1329,18 @@ export default function Dashboard() {
                 <RefreshCcw size={9} className={manualRefreshing ? 'animate-spin' : ''} />
                 {manualRefreshing ? 'atualizando' : 'atualizar'}
               </button>
-            </div>
-            <button onClick={nextMonth} aria-label="Próximo mês" className="p-1.5 active:scale-90 transition-transform shrink-0">
+            </motion.div>
+            <button onClick={() => { setMonthDir(1); nextMonth(); }} aria-label="Próximo mês" className="min-w-[44px] min-h-[44px] -mx-1.5 flex items-center justify-center active:scale-90 transition-transform shrink-0">
               <ChevronRight size={18} className="text-slate-400" />
             </button>
           </div>
 
           {/* Ciclo de temas: Claro → Escuro → Brasil */}
           <button
-            onClick={() => setTheme(t => t === 'light' ? 'dark' : t === 'dark' ? 'brasil' : 'light')}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              changeTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'brasil' : 'light', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+            }}
             title="Mais temas em Ajustes"
             aria-label={theme === 'light' ? 'Ativar modo escuro' : theme === 'dark' ? 'Ativar tema Brasil' : 'Ativar modo claro'}
             className="w-9 h-9 rounded-2xl bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center text-slate-500 dark:text-yellow-400 active:scale-90 transition-all shrink-0"
@@ -1385,7 +1417,7 @@ export default function Dashboard() {
               <TabAjustes userProfile={userProfile} categories={categories} expenses={expenses}
                 shoppingCategories={shoppingCategories}
                 notificationEmails={notificationEmails}
-                currentDate={currentDate} theme={theme} setTheme={setTheme}
+                currentDate={currentDate} theme={theme} setTheme={changeTheme}
                 anniversary={anniversary} onAnniversaryChange={saveAnniversary}
                 fetchData={fetchData} showToast={showToast}
                 onOpenLogs={() => setActiveTab('logs')} onSignOut={signOut}

@@ -160,3 +160,10 @@ body {
   background-color: #1d0a16;
   color: #fff1f6;
 }
+
+/* ── View Transition: revelação circular (troca de tema) ───────────────────── */
+html[data-vt="reveal"]::view-transition-old(root),
+html[data-vt="reveal"]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}

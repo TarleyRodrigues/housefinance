@@ -962,7 +962,7 @@ interface Props {
   shoppingCategories: ShoppingCategory[];
   currentDate: Date;
   theme: ThemeName;
-  setTheme: (v: ThemeName) => void;
+  setTheme: (v: ThemeName, origin?: { x: number; y: number }) => void;
   anniversary: string;
   onAnniversaryChange: (date: string) => void;
   fetchData: () => void;
@@ -1119,7 +1119,7 @@ export function TabAjustes({
           ]).map(({ id, label, icon, color }) => (
             <button
               key={id}
-              onClick={() => setTheme(id)}
+              onClick={(e) => setTheme(id, { x: e.clientX, y: e.clientY })}
               aria-pressed={theme === id}
               className={`min-h-[64px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border ${
                 theme === id
