@@ -253,6 +253,24 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     tabCacheRef.current[`history-${dates.monthStr}`] = Date.now();
   }, [currentDate, dates.monthStr]);
 
+  // ── Retrospectiva: gastos completos de um mês + valores do mês anterior ────
+  const fetchRecapData = useCallback(async (month: Date) => {
+    const monthFilter = (d: Date) =>
+      `payment_month.eq.${format(d, 'yyyy-MM')},and(payment_month.is.null,expense_date.gte.${format(startOfMonth(d), 'yyyy-MM-dd')},expense_date.lte.${format(endOfMonth(d), 'yyyy-MM-dd')})`;
+    const [cur, prev] = await Promise.all([
+      supabase.from('expenses').select('*, profiles(full_name, avatar_url)')
+        .eq('is_deleted', false).or(monthFilter(month)),
+      supabase.from('expenses').select('amount')
+        .eq('is_deleted', false).or(monthFilter(subMonths(month, 1))),
+    ]);
+    if (cur.error) throw cur.error;
+    if (prev.error) throw prev.error;
+    return {
+      expenses:     normalizeProfiles((cur.data ?? []) as unknown as Expense[]),
+      prevExpenses: (prev.data ?? []) as Pick<Expense, 'amount'>[],
+    };
+  }, []);
+
   // ── Núcleo: dados usados em várias abas — todas as consultas em paralelo ────
   // Recarrega ao trocar de mês, após mutações e em eventos realtime;
   // NÃO roda ao trocar de aba.
@@ -435,6 +453,6 @@ export function useDashboardData(currentDate: Date, activeTab: string) {
     aiAnalyses, historyExpenses, studentCard,
     isLoading, error,
     fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard, fetchNotes,
+    fetchStudentCard, fetchNotes, fetchRecapData,
   };
 }

@@ -20,6 +20,7 @@ import { useDashboardData } from '../hooks/useDashboardData';
 import { useAuth } from '../AuthContext';
 import { supabase } from '../supabase';
 import { formatCurrency } from '../utils';
+import { computeMonthRecap } from '../utils/monthRecap';
 
 import { TabExtrato }   from '../tabs/TabExtrato';
 import { TabNovoGasto } from '../tabs/TabNovoGasto';
@@ -34,9 +35,10 @@ const TabRecorrentes = lazy(() => import('../tabs/TabRecorrentes').then(m => ({ 
 const TabCompras     = lazy(() => import('../tabs/TabCompras').then(m     => ({ default: m.TabCompras     })));
 const TabNotas       = lazy(() => import('../tabs/TabNotas').then(m       => ({ default: m.TabNotas       })));
 const TabAvisos      = lazy(() => import('../tabs/TabAvisos').then(m      => ({ default: m.TabAvisos      })));
+const MonthRecapStories = lazy(() => import('../components/MonthRecapStories'));
 const TabAjustes     = lazy(() => import('../tabs/TabAjustes').then(m     => ({ default: m.TabAjustes     })));
 
-import type { CelebrationData, Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
+import type { CelebrationData, MonthRecap, Expense, ExpensePayload, ExpenseTemplatePayload, NotePayload, ShoppingItem, WatchStatus, Dream, RecurringExpense, CatalogPricePoint, StudentCardPayload } from '../types';
 import type { RecipeStep } from '../tabs/TabReceitas';
 
 const RECIPE_BUCKET = 'recipe-images';
@@ -212,8 +214,28 @@ export default function Dashboard() {
     recipes, dreams, expenseTemplates, recurringExpenses,
     aiAnalyses, historyExpenses, studentCard,
     isLoading, fetchData, fetchRecipes, fetchShoppingList, fetchCatalog, fetchShoppingHistory, fetchShoppingCategories, fetchNotificationEmails, fetchMerchants,
-    fetchStudentCard, fetchNotes,
+    fetchStudentCard, fetchNotes, fetchRecapData,
   } = useDashboardData(currentDate, activeTab);
+
+  // ── Retrospectiva do mês (stories) ────────────────────────────────────────
+  // undefined = fechada · null = carregando · MonthRecap = pronta
+  const [recap, setRecap] = useState<MonthRecap | null | undefined>(undefined);
+  const recapRequest = useRef(0);
+  const openRecap = useCallback(async (month: Date) => {
+    const req = ++recapRequest.current;
+    setRecap(null);
+    try {
+      const { expenses: exps, prevExpenses } = await fetchRecapData(month);
+      if (req !== recapRequest.current) return; // fechada ou reaberta no meio
+      setRecap(computeMonthRecap(exps, prevExpenses, categories, month));
+      localStorage.setItem(`recap-seen-${format(month, 'yyyy-MM')}`, '1');
+    } catch (err) {
+      console.error('[recap]', err);
+      if (req === recapRequest.current) setRecap(undefined);
+      showToast('Erro ao carregar a retrospectiva. Tente novamente.', 'error');
+    }
+  }, [fetchRecapData, categories, showToast]);
+  const closeRecap = useCallback(() => { recapRequest.current += 1; setRecap(undefined); }, []);
 
   const handleManualRefresh = useCallback(async () => {
     if (manualRefreshing) return;
@@ -1075,6 +1097,14 @@ export default function Dashboard() {
 
       <Celebration data={celebration} onClose={closeCelebration} />
 
+      <AnimatePresence>
+        {recap !== undefined && (
+          <Suspense fallback={null}>
+            <MonthRecapStories key="recap" data={recap} onClose={closeRecap} showToast={showToast} />
+          </Suspense>
+        )}
+      </AnimatePresence>
+
       {/* Pull-to-refresh indicator */}
       <AnimatePresence>
         {(pullDistance > 0 || isRefreshing) && (
@@ -1159,7 +1189,7 @@ export default function Dashboard() {
                 recurringExpenses={recurringExpenses}
                 watchlistItems={watchlistItems} notes={notes}
                 currentDate={currentDate} isLoading={isLoading}
-                onNavigate={setActiveTab} />
+                onNavigate={setActiveTab} onOpenRecap={openRecap} />
             )}
             {activeTab === 'list' && (
               <TabExtrato expenses={expenses} categories={categories} prevMonthTotal={prevMonthTotal}

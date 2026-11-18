@@ -14,7 +14,7 @@ import { formatCurrency } from '../utils';
 import type { Expense, Category, Reminder, ShoppingItem, Dream, RecurringExpense, WatchlistItem, Note } from '../types';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedNumber } from '../components/AnimatedNumber';
-import { Sparkles as EmptySparkles } from 'lucide-react';
+import { Sparkles as EmptySparkles, ChevronRight } from 'lucide-react';
 
 const TMDB_W92 = 'https://image.tmdb.org/t/p/w92';
 
@@ -31,13 +31,17 @@ interface Props {
   currentDate: Date;
   isLoading: boolean;
   onNavigate: (tab: string) => void;
+  onOpenRecap: (month: Date) => void;
 }
+
+// Banner da retrospectiva do mês anterior aparece nos primeiros dias do mês
+const RECAP_BANNER_DAYS = 7;
 
 export function TabHome({
   expenses, prevMonthExpenses, categories, reminders,
   shoppingList, dreams, recurringExpenses,
   watchlistItems, notes,
-  currentDate, isLoading, onNavigate,
+  currentDate, isLoading, onNavigate, onOpenRecap,
 }: Props) {
   const today = startOfToday();
 
@@ -214,6 +218,38 @@ export function TabHome({
           </div>
         </div>
       </motion.div>
+
+      {/* ── Retrospectiva ─────────────────────────────────────────────────── */}
+      {(() => {
+        const now = new Date();
+        const viewingCurrent = currentDate.getFullYear() === now.getFullYear() && currentDate.getMonth() === now.getMonth();
+        const viewingPast = currentDate < new Date(now.getFullYear(), now.getMonth(), 1);
+        const target = viewingCurrent ? new Date(now.getFullYear(), now.getMonth() - 1, 1) : currentDate;
+        const showBanner = (viewingCurrent && now.getDate() <= RECAP_BANNER_DAYS) || viewingPast;
+        if (!showBanner) return null;
+        const monthName = format(target, 'MMMM', { locale: ptBR });
+        const isNew = viewingCurrent && !localStorage.getItem(`recap-seen-${format(target, 'yyyy-MM')}`);
+        return (
+          <motion.button
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.35 }}
+            onClick={() => onOpenRecap(target)}
+            className="relative w-full overflow-hidden rounded-3xl p-4 pr-5 text-left text-white bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 shadow-lg shadow-violet-500/30 active:scale-[0.98] transition-transform flex items-center gap-4 min-h-[64px]"
+          >
+            <span className="absolute -right-6 -top-8 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
+            <span className="relative w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center text-2xl shrink-0" aria-hidden="true">🎬</span>
+            <span className="relative flex-1 min-w-0">
+              <span className="block text-[9px] font-black uppercase tracking-[0.2em] text-white/70">
+                {isNew ? 'Novidade' : 'Retrospectiva'}
+              </span>
+              <span className="block font-black text-sm leading-tight mt-0.5">
+                {isNew ? `A retrospectiva de ${monthName} chegou!` : `Ver retrospectiva de ${monthName}`}
+              </span>
+            </span>
+            {isNew && <span className="relative w-2.5 h-2.5 rounded-full bg-amber-300 shrink-0 animate-pulse" aria-hidden="true" />}
+            <ChevronRight size={18} className="relative shrink-0 text-white/80" />
+          </motion.button>
+        );
+      })()}
 
       {/* ── Grid: Compras + Lembretes ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">

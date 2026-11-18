@@ -152,6 +152,39 @@ export interface Log {
 // ─────────────────────────────────────────────────────────────────────────────
 // UI
 // ─────────────────────────────────────────────────────────────────────────────
+// Retrospectiva do mês (stories estilo Wrapped) — ver utils/monthRecap
+export interface RecapCategory {
+  name: string;
+  total: number;
+  pct: number;            // % do total do mês
+  color?: string;
+}
+
+export interface RecapPerson {
+  userId: string;
+  name: string;
+  avatarUrl?: string;
+  count: number;
+  total: number;
+}
+
+export interface MonthRecap {
+  monthLabel: string;     // 'Outubro'
+  year: number;
+  total: number;
+  count: number;
+  dailyAvg: number;
+  prevTotal: number;
+  diffPct: number | null; // vs mês anterior (null se não houver base)
+  topCategories: RecapCategory[];
+  priciestDay: { date: string; total: number; count: number; topDescription: string } | null;
+  topMerchant: { name: string; count: number; total: number } | null;
+  people: RecapPerson[];
+  biggest: { description: string; amount: number; category: string; date: string } | null;
+  goals: { within: number; total: number } | null;
+  weekendPct: number;     // % do valor gasto em sábados/domingos
+}
+
 // Celebração (confete + cartão) — ver components/Celebration
 export interface CelebrationData {
   id: number;
