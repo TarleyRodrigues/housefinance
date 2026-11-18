@@ -19,8 +19,8 @@
     <script>
       try {
         var t = localStorage.getItem('theme');
-        if (t === 'dark' || t === 'brasil') document.documentElement.classList.add('dark');
-        if (t === 'brasil') document.documentElement.classList.add('brasil');
+        if (t && t !== 'light') document.documentElement.classList.add('dark');
+        if (t === 'brasil' || t === 'natal' || t === 'amor') document.documentElement.classList.add(t);
       } catch (e) {}
     </script>
   </head>

@@ -24,6 +24,7 @@ import type {
 import { CategoryEmoji } from '../components/CategoryEmoji';
 import { EmojiPickerSheet } from '../components/EmojiPickerSheet';
 import { categoryEmoji, categoryLabel } from '../utils/categoryEmoji';
+import type { ThemeName } from '../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Paleta de cores
@@ -960,8 +961,10 @@ interface Props {
   expenses: Expense[];
   shoppingCategories: ShoppingCategory[];
   currentDate: Date;
-  theme: 'light' | 'dark' | 'brasil';
-  setTheme: (v: 'light' | 'dark' | 'brasil') => void;
+  theme: ThemeName;
+  setTheme: (v: ThemeName) => void;
+  anniversary: string;
+  onAnniversaryChange: (date: string) => void;
   fetchData: () => void;
   showToast: (msg: string, type?: string) => void;
   onOpenLogs: () => void;
@@ -993,7 +996,7 @@ interface Props {
 // ─────────────────────────────────────────────────────────────────────────────
 export function TabAjustes({
   userProfile, categories, expenses, shoppingCategories, notificationEmails, merchants, currentDate,
-  theme, setTheme, fetchData, showToast,
+  theme, setTheme, fetchData, showToast, anniversary, onAnniversaryChange,
   onOpenLogs, onSignOut, onAddCategory, onUpdateCategory, onDeleteCategory,
   onAddShoppingCategory, onUpdateShoppingCategory, onDeleteShoppingCategory,
   onAddNotificationEmail, onToggleNotificationEmail, onDeleteNotificationEmail,
@@ -1106,26 +1109,40 @@ export function TabAjustes({
       {/* ── 2. APARÊNCIA ── */}
       <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 p-4 shadow-sm space-y-3">
         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">Aparência</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-5 gap-1.5">
           {([
             { id: 'light'  as const, label: 'Claro',  icon: <Sun size={18} />,                                     color: 'text-amber-400'  },
             { id: 'dark'   as const, label: 'Escuro', icon: <Moon size={18} />,                                    color: 'text-indigo-400' },
             { id: 'brasil' as const, label: 'Brasil', icon: <span className="text-xl leading-none">🇧🇷</span>, color: ''                },
+            { id: 'natal'  as const, label: 'Natal',  icon: <span className="text-xl leading-none">🎄</span>, color: ''                },
+            { id: 'amor'   as const, label: 'Amor',   icon: <span className="text-xl leading-none">💕</span>, color: ''                },
           ]).map(({ id, label, icon, color }) => (
             <button
               key={id}
               onClick={() => setTheme(id)}
               aria-pressed={theme === id}
-              className={`p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95 border ${
+              className={`min-h-[64px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border ${
                 theme === id
                   ? 'bg-blue-600 border-transparent text-white shadow-lg shadow-blue-500/25'
                   : `bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-700 ${color}`
               }`}
             >
               {icon}
-              <span className="text-[9px] font-black uppercase tracking-widest leading-none">{label}</span>
+              <span className="text-[8px] font-black uppercase tracking-wider leading-none">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Data especial do casal → tema Amor surpresa no dia */}
+        <div className="flex items-center gap-3 p-3 bg-pink-50 dark:bg-pink-900/10 rounded-2xl border border-pink-100 dark:border-pink-900/30">
+          <span className="text-2xl leading-none" aria-hidden="true">💕</span>
+          <div className="flex-1 min-w-0">
+            <label htmlFor="anniversary" className="block text-[10px] font-black uppercase tracking-widest text-pink-600 dark:text-pink-400">Data especial do casal</label>
+            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 leading-snug">Nesse dia o app vira tema Amor, com surpresa 🎁</p>
+          </div>
+          <input id="anniversary" type="date" value={anniversary}
+            onChange={(e) => { onAnniversaryChange(e.target.value); if (e.target.value) showToast('Data especial salva! 💕'); }}
+            className="min-h-[44px] w-[8.5rem] px-2 bg-white dark:bg-slate-800 rounded-xl border border-pink-200 dark:border-pink-900/50 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none" />
         </div>
       </div>
 

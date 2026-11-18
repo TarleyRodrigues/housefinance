@@ -277,6 +277,10 @@ export interface ToastState {
   type: string;
 }
 
+// Temas: claro, escuro e especiais (todos os especiais são variações do escuro)
+export type ThemeName = 'light' | 'dark' | 'brasil' | 'natal' | 'amor';
+export const SPECIAL_THEMES = ['brasil', 'natal', 'amor'] as const;
+
 export type TabName =
   | 'home'
   | 'list'

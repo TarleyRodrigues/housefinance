@@ -42,6 +42,8 @@ import type { CelebrationData, ChallengePayload, MonthRecap, Expense, ExpensePay
 import type { RecipeStep } from '../tabs/TabReceitas';
 import { computeBadges } from '../utils/badges';
 import { computeChallengeProgress } from '../utils/challenges';
+import { SeasonalOverlay } from '../components/SeasonalOverlay';
+import { SPECIAL_THEMES, type ThemeName } from '../types';
 
 const RECIPE_BUCKET = 'recipe-images';
 
@@ -136,6 +138,25 @@ const TAB_GRADIENT_RGB: Record<string, string> = {
   logs:       '148,163,184',
 };
 
+// Decoração do fundo nos temas especiais
+const THEME_DECOR = {
+  brasil: {
+    dots: 'rgba(252,202,2,0.08)', top: 'rgba(0,39,118,0.30)',
+    orbs: ['rgba(252,202,2,0.40)', 'rgba(0,39,118,0.45)', 'rgba(0,156,59,0.25)', 'rgba(252,202,2,0.18)'],
+    ring: 'rgba(252,202,2,0.15)', ringCls: 'border-yellow-500/15', diamondCls: 'border-yellow-400/[0.12]', miniCls: 'border-yellow-400/15',
+  },
+  natal: {
+    dots: 'rgba(255,255,255,0.07)', top: 'rgba(185,28,28,0.28)',
+    orbs: ['rgba(220,38,38,0.35)', 'rgba(21,128,61,0.40)', 'rgba(234,179,8,0.18)', 'rgba(220,38,38,0.16)'],
+    ring: 'rgba(234,179,8,0.15)', ringCls: 'border-emerald-400/15', diamondCls: 'border-yellow-300/[0.12]', miniCls: 'border-red-400/15',
+  },
+  amor: {
+    dots: 'rgba(244,114,182,0.08)', top: 'rgba(190,24,93,0.28)',
+    orbs: ['rgba(236,72,153,0.38)', 'rgba(225,29,72,0.35)', 'rgba(244,114,182,0.22)', 'rgba(251,113,133,0.18)'],
+    ring: 'rgba(244,114,182,0.18)', ringCls: 'border-pink-400/15', diamondCls: 'border-rose-300/[0.12]', miniCls: 'border-pink-300/15',
+  },
+} as const;
+
 const SHORTCUT_TABS = new Set(['home', 'list', 'add', 'shopping', 'reminders', 'notes', 'stats', 'recurrent']);
 
 export default function Dashboard() {
@@ -154,20 +175,30 @@ export default function Dashboard() {
   }, []);
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const [theme, setTheme] = useState<'light' | 'dark' | 'brasil'>(() => {
+  const [theme, setTheme] = useState<ThemeName>(() => {
     const saved = localStorage.getItem('theme');
-    if (saved === 'dark' || saved === 'brasil') return saved;
+    if (saved === 'dark' || saved === 'brasil' || saved === 'natal' || saved === 'amor') return saved;
     return 'light';
   });
+  // Data especial do casal (yyyy-MM-dd, guardada no aparelho): nesse dia o app
+  // abre no tema Amor, sem mudar a preferência salva.
+  const [anniversary, setAnniversary] = useState<string>(() => localStorage.getItem('couple-anniversary') ?? '');
+  const saveAnniversary = useCallback((date: string) => {
+    setAnniversary(date);
+    if (date) localStorage.setItem('couple-anniversary', date); else localStorage.removeItem('couple-anniversary');
+  }, []);
+  const isAnniversaryToday = !!anniversary && anniversary.slice(5) === format(new Date(), 'MM-dd');
+  const effectiveTheme: ThemeName = isAnniversaryToday ? 'amor' : theme;
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('dark', 'brasil');
-    if (theme !== 'light') root.classList.add('dark');
-    if (theme === 'brasil') root.classList.add('brasil');
+    root.classList.remove('dark', ...SPECIAL_THEMES);
+    if (effectiveTheme !== 'light') root.classList.add('dark');
+    if ((SPECIAL_THEMES as readonly string[]).includes(effectiveTheme)) root.classList.add(effectiveTheme);
     localStorage.setItem('theme', theme);
-  }, [theme]);
-  const isDark   = theme !== 'light';
-  const isBrasil = theme === 'brasil';
+  }, [theme, effectiveTheme]);
+  const isDark = effectiveTheme !== 'light';
+  const deco   = effectiveTheme === 'brasil' || effectiveTheme === 'natal' || effectiveTheme === 'amor'
+    ? THEME_DECOR[effectiveTheme] : null;
 
   const [toast, setToast] = useState<{ id: number; msg: string; type: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -342,6 +373,22 @@ export default function Dashboard() {
       message: c.reward ? `Gastaram ${formatCurrency(c.spent)} de ${formatCurrency(c.limit_amount)}. Hora do prêmio: ${c.reward} 🎁` : `Gastaram ${formatCurrency(c.spent)} de ${formatCurrency(c.limit_amount)}. Mandaram bem!`,
     });
   }, [challengeProgress, celebrate]);
+
+  // ── Data especial: comemoração 1x por ano ─────────────────────────────────
+  useEffect(() => {
+    if (!isAnniversaryToday) return;
+    const year = new Date().getFullYear();
+    const KEY = `anniversary-celebrated-${year}`;
+    if (localStorage.getItem(KEY)) return;
+    localStorage.setItem(KEY, '1');
+    const since = Number(anniversary.slice(0, 4));
+    const years = since && since < year ? year - since : 0;
+    celebrate({
+      emoji: '💕',
+      title: years ? `${years} ano${years > 1 ? 's' : ''} juntos!` : 'Hoje é um dia especial!',
+      message: 'Feliz aniversário do casal! Hoje o app está vestido para a ocasião. 🥂',
+    });
+  }, [isAnniversaryToday, anniversary, celebrate]);
 
   // ── Selos ──────────────────────────────────────────────────────────────────
   const badges = useMemo(
@@ -1110,10 +1157,10 @@ export default function Dashboard() {
             const rgb = TAB_GRADIENT_RGB[activeTab] ?? '148,163,184';
             return {
               zIndex: 0,
-              backgroundImage: isBrasil
+              backgroundImage: deco
                 ? [
-                    `radial-gradient(circle, rgba(252,202,2,0.08) 1px, transparent 1px)`,
-                    `linear-gradient(to bottom, rgba(0,39,118,0.30) 0%, transparent 60%)`,
+                    `radial-gradient(circle, ${deco.dots} 1px, transparent 1px)`,
+                    `linear-gradient(to bottom, ${deco.top} 0%, transparent 60%)`,
                   ].join(', ')
                 : isDark
                 ? [
@@ -1134,7 +1181,7 @@ export default function Dashboard() {
               <div
                 className="absolute -top-28 -right-28 w-[22rem] h-[22rem] rounded-full transition-colors duration-500"
                 style={{
-                  backgroundColor: isBrasil ? 'rgba(252,202,2,0.40)' : `rgba(${TAB_GRADIENT_RGB[activeTab] ?? '59,130,246'}, ${isDark ? 0.28 : 0.42})`,
+                  backgroundColor: deco ? deco.orbs[0] : `rgba(${TAB_GRADIENT_RGB[activeTab] ?? '59,130,246'}, ${isDark ? 0.28 : 0.42})`,
                   filter: 'blur(72px)',
                 }}
               />
@@ -1142,7 +1189,7 @@ export default function Dashboard() {
               <div
                 className="absolute -bottom-28 -left-28 w-80 h-80 rounded-full transition-colors duration-300"
                 style={{
-                  backgroundColor: isBrasil ? 'rgba(0,39,118,0.45)' : isDark ? 'rgba(139,92,246,0.22)' : 'rgba(139,92,246,0.32)',
+                  backgroundColor: deco ? deco.orbs[1] : isDark ? 'rgba(139,92,246,0.22)' : 'rgba(139,92,246,0.32)',
                   filter: 'blur(72px)',
                 }}
               />
@@ -1150,7 +1197,7 @@ export default function Dashboard() {
               <div
                 className="absolute -top-16 -left-20 w-64 h-64 rounded-full"
                 style={{
-                  backgroundColor: isBrasil ? 'rgba(0,156,59,0.25)' : isDark ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.22)',
+                  backgroundColor: deco ? deco.orbs[2] : isDark ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.22)',
                   filter: 'blur(60px)',
                 }}
               />
@@ -1158,21 +1205,24 @@ export default function Dashboard() {
               <div
                 className="absolute -bottom-16 -right-16 w-56 h-56 rounded-full"
                 style={{
-                  backgroundColor: isBrasil ? 'rgba(252,202,2,0.18)' : isDark ? 'rgba(52,211,153,0.10)' : 'rgba(52,211,153,0.20)',
+                  backgroundColor: deco ? deco.orbs[3] : isDark ? 'rgba(52,211,153,0.10)' : 'rgba(52,211,153,0.20)',
                   filter: 'blur(56px)',
                 }}
               />
               {/* Ring grande — borda superior direita */}
               <div
                 className="absolute -top-16 -right-16 w-80 h-80 rounded-full border-2 transition-colors duration-500"
-                style={{ borderColor: isBrasil ? 'rgba(252,202,2,0.15)' : `rgba(${TAB_GRADIENT_RGB[activeTab] ?? '59,130,246'}, ${isDark ? 0.10 : 0.22})` }}
+                style={{ borderColor: deco ? deco.ring : `rgba(${TAB_GRADIENT_RGB[activeTab] ?? '59,130,246'}, ${isDark ? 0.10 : 0.22})` }}
               />
               {/* Ring médio — lateral esquerda */}
-              <div className={`absolute top-52 -left-14 w-40 h-40 rounded-full border-2 ${isBrasil ? 'border-yellow-500/15' : isDark ? 'border-violet-400/10' : 'border-violet-400/25'}`} />
+              <div className={`absolute top-52 -left-14 w-40 h-40 rounded-full border-2 ${deco ? deco.ringCls : isDark ? 'border-violet-400/10' : 'border-violet-400/25'}`} />
               {/* Diamond */}
-              <div className={`absolute top-64 right-5 w-16 h-16 rotate-45 border-2 ${isBrasil ? 'border-yellow-400/[0.12]' : isDark ? 'border-white/[0.06]' : 'border-slate-400/[0.14]'}`} />
+              <div className={`absolute top-64 right-5 w-16 h-16 rotate-45 border-2 ${deco ? deco.diamondCls : isDark ? 'border-white/[0.06]' : 'border-slate-400/[0.14]'}`} />
+              {/* Neve (Natal) / corações (Amor) */}
+              {effectiveTheme === 'natal' && <SeasonalOverlay kind="snow" />}
+              {effectiveTheme === 'amor' && <SeasonalOverlay kind="hearts" />}
               {/* Mini ring acento */}
-              <div className={`absolute bottom-64 left-16 w-11 h-11 rounded-full border ${isBrasil ? 'border-yellow-400/15' : isDark ? 'border-sky-400/10' : 'border-sky-400/22'}`} />
+              <div className={`absolute bottom-64 left-16 w-11 h-11 rounded-full border ${deco ? deco.miniCls : isDark ? 'border-sky-400/10' : 'border-sky-400/22'}`} />
             </div>
           </div>
         </div>,
@@ -1259,6 +1309,7 @@ export default function Dashboard() {
           {/* Ciclo de temas: Claro → Escuro → Brasil */}
           <button
             onClick={() => setTheme(t => t === 'light' ? 'dark' : t === 'dark' ? 'brasil' : 'light')}
+            title="Mais temas em Ajustes"
             aria-label={theme === 'light' ? 'Ativar modo escuro' : theme === 'dark' ? 'Ativar tema Brasil' : 'Ativar modo claro'}
             className="w-9 h-9 rounded-2xl bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center text-slate-500 dark:text-yellow-400 active:scale-90 transition-all shrink-0"
           >
@@ -1335,6 +1386,7 @@ export default function Dashboard() {
                 shoppingCategories={shoppingCategories}
                 notificationEmails={notificationEmails}
                 currentDate={currentDate} theme={theme} setTheme={setTheme}
+                anniversary={anniversary} onAnniversaryChange={saveAnniversary}
                 fetchData={fetchData} showToast={showToast}
                 onOpenLogs={() => setActiveTab('logs')} onSignOut={signOut}
                 onAddCategory={addCategory} onUpdateCategory={updateCategory}
